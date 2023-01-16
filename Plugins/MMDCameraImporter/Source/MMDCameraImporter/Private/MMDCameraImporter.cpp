@@ -8,6 +8,7 @@
 #include "MMDCameraImporterStyle.h"
 #include "MMDUserImportVMDSettings.h"
 #include "ToolMenus.h"
+#include "VMDImporter.h"
 #include "DesktopPlatform/Public/DesktopPlatformModule.h"
 #include "DesktopPlatform/Public/IDesktopPlatform.h"
 #include "LevelSequence/Public/LevelSequence.h"
@@ -208,22 +209,15 @@ private:
 			return FReply::Unhandled();
 		}
 
-		//FFBXInOutParameters InOutParams;
-		//if (!MovieSceneToolHelpers::ReadyFBXForImport(ImportFilename, ImportVmdSettings, InOutParams))
-		//{
-		//	return FReply::Unhandled();
-		//}
+		FVmdImporter VmdImporter;
+		VmdImporter.SetFilePath(ImportFilename);
+
+		if (!VmdImporter.IsValidVmdFile())
+		{
+		    return FReply::Unhandled();
+		}
 
 		const FScopedTransaction Transaction(LOCTEXT("ImportVMDTransaction", "Import VMD"));
-		//UnFbx::FFbxImporter* FbxImporter = UnFbx::FFbxImporter::GetInstance();
-
-		// ReSharper disable once CppTooWideScopeInitStatement
-		bool bMatchByNameOnly = ImportVmdSettings->bMatchByNameOnly;
-		if (ObjectBindingMap.Num() == 1 && bMatchByNameOnly)
-		{
-			UE_LOG(LogMovieScene, Display, TEXT("Fbx Import: Importing onto one selected binding, disabling match by name only."));
-			bMatchByNameOnly = false;
-		}
 
 		//Import static cameras first
 		// ImportFBXCamera(FbxImporter, Sequence, *Sequencer, ObjectBindingMap, bMatchByNameOnly, bCreateCameras.IsSet() ? bCreateCameras.GetValue() : ImportVmdSettings->bCreateCameras);

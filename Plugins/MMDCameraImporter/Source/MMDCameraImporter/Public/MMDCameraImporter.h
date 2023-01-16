@@ -15,18 +15,18 @@ public:
 	virtual void ShutdownModule() override;
 
 private:
-    void OnSequencerCreated(const TSharedRef<ISequencer> Sequencer);
+	void OnSequencerCreated(const TSharedRef<ISequencer> Sequencer);
 	void RegisterMenus();
 #if ENGINE_MAJOR_VERSION < 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION == 0)
-    void UnregisterMenus() const;
+	void UnregisterMenus() const;
 #endif
-    void ImportVmd();
+	void ImportVmd();
 	bool ImportVmdWIthDialog(UMovieSceneSequence* InSequence, ISequencer& InSequencer, const TMap<FGuid, FString>& InObjectBindingMap, TOptional<bool> bCreateCameras);
 
 private:
 	TSharedPtr<FUICommandList> PluginCommands;
-    TWeakPtr<ISequencer> WeakSequencer;
-    FDelegateHandle SequencerCreatedHandle;
+	TWeakPtr<ISequencer> WeakSequencer;
+	FDelegateHandle SequencerCreatedHandle;
 #if ENGINE_MAJOR_VERSION < 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION == 0)
 	TSharedPtr<FExtender> SequencerToolBarExtender;
 #endif

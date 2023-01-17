@@ -6,7 +6,7 @@
 
 void FMmdCameraImporterCommands::RegisterCommands()
 {
-    UI_COMMAND(ImportVmd, "Import VMD", "Import VMD file", EUserInterfaceActionType::Button, FInputChord());
+	UI_COMMAND(ImportVmd, "Import VMD", "Import VMD file", EUserInterfaceActionType::Button, FInputChord());
 }
 
 #undef LOCTEXT_NAMESPACE

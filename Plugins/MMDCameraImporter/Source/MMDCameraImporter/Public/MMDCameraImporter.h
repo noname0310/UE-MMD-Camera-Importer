@@ -6,6 +6,8 @@
 #include "MovieSceneSequence.h"
 #include "Modules/ModuleManager.h"
 
+DECLARE_LOG_CATEGORY_EXTERN(LogMMDCameraImporter, Log, All);
+
 class FMmdCameraImporterModule final : public IModuleInterface
 {
 public:

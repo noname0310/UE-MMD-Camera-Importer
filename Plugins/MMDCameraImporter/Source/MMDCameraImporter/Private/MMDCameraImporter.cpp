@@ -14,6 +14,8 @@
 #include "LevelSequence/Public/LevelSequence.h"
 #include "Runtime/Launch/Resources/Version.h"
 
+DEFINE_LOG_CATEGORY(LogMMDCameraImporter);
+
 #define LOCTEXT_NAMESPACE "FMmdCameraImporterModule"
 
 //void ImportFBXCamera(UnFbx::FFbxImporter* FbxImporter, UMovieSceneSequence* InSequence, ISequencer& InSequencer, TMap<FGuid, FString>& InObjectBindingMap, bool bMatchByNameOnly, bool bCreateCameras)

@@ -220,6 +220,16 @@ private:
 		}
 
 		const FScopedTransaction Transaction(LOCTEXT("ImportVMDTransaction", "Import VMD"));
+		
+        // ReSharper disable once CppUseStructuredBinding
+        const FVmdParseResult ParseResult = VmdImporter.ParseVmdFile();
+        UE_LOG(LogMMDCameraImporter, Warning, TEXT("VMD Parse Result: %s"), ParseResult.bIsSuccess ? TEXT("true") : TEXT("false"));
+		UE_LOG(LogMMDCameraImporter, Warning, TEXT("Bone Key Count: %d"), ParseResult.BoneKeyFrames.Num());
+		UE_LOG(LogMMDCameraImporter, Warning, TEXT("Morph Key Count: %d"), ParseResult.MorphKeyFrames.Num());
+		UE_LOG(LogMMDCameraImporter, Warning, TEXT("Camera Key Count: %d"), ParseResult.CameraKeyFrames.Num());
+        UE_LOG(LogMMDCameraImporter, Warning, TEXT("Light Key Count: %d"), ParseResult.LightKeyFrames.Num());
+        UE_LOG(LogMMDCameraImporter, Warning, TEXT("Self Shadow Key Count: %d"), ParseResult.SelfShadowKeyFrames.Num());
+        UE_LOG(LogMMDCameraImporter, Warning, TEXT("Property Key Count: %d"), ParseResult.PropertyKeyFrames.Num());
 
 		//Import static cameras first
 		// ImportFBXCamera(FbxImporter, Sequence, *Sequencer, ObjectBindingMap, bMatchByNameOnly, bCreateCameras.IsSet() ? bCreateCameras.GetValue() : ImportVmdSettings->bCreateCameras);
@@ -229,10 +239,7 @@ private:
 
 		Sequencer->NotifyMovieSceneDataChanged(EMovieSceneDataChangeType::MovieSceneStructureItemAdded);
 
-		// ReSharper disable once CppTooWideScopeInitStatement
-		const TSharedPtr<SWindow> Window = FSlateApplication::Get().FindWidgetWindow(AsShared());
-
-		if (Window.IsValid())
+        if (const TSharedPtr<SWindow> Window = FSlateApplication::Get().FindWidgetWindow(AsShared()); Window.IsValid())
 		{
 			Window->RequestDestroyWindow();
 		}
@@ -347,7 +354,7 @@ void FMmdCameraImporterModule::ImportVmd()
 {
 	if (!WeakSequencer.IsValid())
 	{
-		UE_LOG(LogTemp, Error, TEXT("Import VMD: Sequencer is not valid"));
+		UE_LOG(LogMMDCameraImporter, Error, TEXT("Import VMD: Sequencer is not valid"));
 		return;
 	}
 	const TSharedPtr<ISequencer> Sequencer = WeakSequencer.Pin();

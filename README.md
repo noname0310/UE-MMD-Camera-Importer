@@ -2,7 +2,7 @@
 
 ## Unreal Engine plugin for import MMD Camera Animation
 
-I am implementing VMD file parsing.
+Implementing Sequencer Animation Import
 
 ### Project Goals:
 

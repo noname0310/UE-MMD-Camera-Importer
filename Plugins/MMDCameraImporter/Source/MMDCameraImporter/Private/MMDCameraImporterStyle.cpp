@@ -7,6 +7,7 @@
 #include "Interfaces/IPluginManager.h"
 #include "Styling/SlateStyleMacros.h"
 
+// ReSharper disable once CppUE4CodingStandardNamingViolationWarning
 #define RootToContentDir Style->RootToContentDir
 
 TSharedPtr<FSlateStyleSet> FMmdCameraImporterStyle::StyleInstance = nullptr;

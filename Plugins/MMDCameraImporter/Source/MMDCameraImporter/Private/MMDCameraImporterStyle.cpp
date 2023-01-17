@@ -36,12 +36,12 @@ FName FMmdCameraImporterStyle::GetStyleSetName()
 
 TSharedRef<FSlateStyleSet> FMmdCameraImporterStyle::Create()
 {
-    const FVector2D Icon20x20(20.0f, 20.0f);
+    const FVector2D Icon20X20(20.0f, 20.0f);
 
     TSharedRef< FSlateStyleSet > Style = MakeShareable(new FSlateStyleSet("MMDCameraImporterStyle"));
     Style->SetContentRoot(IPluginManager::Get().FindPlugin("MMDCameraImporter")->GetBaseDir() / TEXT("Resources"));
 
-    Style->Set("MMDCameraImporter.ImportVmd", new IMAGE_BRUSH_SVG(TEXT("PlaceholderButtonIcon"), Icon20x20));
+    Style->Set("MMDCameraImporter.ImportVmd", new IMAGE_BRUSH_SVG(TEXT("PlaceholderButtonIcon"), Icon20X20));
 
     return Style;
 }

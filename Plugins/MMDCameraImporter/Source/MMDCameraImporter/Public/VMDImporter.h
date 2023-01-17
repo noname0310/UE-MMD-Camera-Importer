@@ -47,7 +47,7 @@ struct FVmdObject
 		float Position[3];
 		float Rotation[3];
 		int8 Interpolation[24];
-		uint8 ViewAngle;
+		uint32 ViewAngle;
 		uint8 Perspective; // this value can be reinterpret_cast to bool
 	};
 

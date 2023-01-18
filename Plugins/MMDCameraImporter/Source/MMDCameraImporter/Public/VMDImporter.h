@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MovieSceneSequence.h"
 
 // TODO: little endian check
 
@@ -119,6 +120,13 @@ public:
 	void SetFilePath(const FString& InFilePath);
 	bool IsValidVmdFile();
 	FVmdParseResult ParseVmdFile();
+
+	static void ImportVmdCamera(
+		const FVmdParseResult& InVmdParseResult,
+        const UMovieSceneSequence* InSequence,
+		ISequencer& InSequencer,
+		const bool bCreateCameras
+	);
 
 private:
 	static FArchive* OpenFile(FString FilePath);

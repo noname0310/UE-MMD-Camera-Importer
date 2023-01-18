@@ -2,9 +2,15 @@
 
 #include "VMDImporter.h"
 
+#include "CineCameraActor.h"
+#include "ISequencerModule.h"
+#include "LevelEditorViewport.h"
 #include "MMDCameraImporter.h"
 #include "MMDImportHelper.h"
+#include "Framework/Notifications/NotificationManager.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Widgets/Notifications/SNotificationList.h"
+#include "SequencerSelection.h"
 
 #define LOCTEXT_NAMESPACE "FMmdCameraImporterModule"
 
@@ -174,6 +180,7 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	FileReader->Serialize(&BoneKeyFrameCount, sizeof(uint32));
 	VmdParseResult.BoneKeyFrames.SetNum(BoneKeyFrameCount);
 	FileReader->Serialize(VmdParseResult.BoneKeyFrames.GetData(), sizeof(FVmdObject::FBoneKeyFrame) * BoneKeyFrameCount);
+    VmdParseResult.BoneKeyFrames.Sort([](const FVmdObject::FBoneKeyFrame& A, const FVmdObject::FBoneKeyFrame& B) { return A.FrameNumber < B.FrameNumber; });
 
 	if (ImportVmdTask.ShouldCancel())
 	{
@@ -184,6 +191,7 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	FileReader->Serialize(&MorphKeyFrameCount, sizeof(uint32));
 	VmdParseResult.MorphKeyFrames.SetNum(MorphKeyFrameCount);
 	FileReader->Serialize(VmdParseResult.MorphKeyFrames.GetData(), sizeof(FVmdObject::FMorphKeyFrame) * MorphKeyFrameCount);
+    VmdParseResult.MorphKeyFrames.Sort([](const FVmdObject::FMorphKeyFrame& A, const FVmdObject::FMorphKeyFrame& B) { return A.FrameNumber < B.FrameNumber; });
 
 	if (ImportVmdTask.ShouldCancel())
 	{
@@ -194,6 +202,7 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	FileReader->Serialize(&CameraKeyFrameCount, sizeof(uint32));
 	VmdParseResult.CameraKeyFrames.SetNum(CameraKeyFrameCount);
 	FileReader->Serialize(VmdParseResult.CameraKeyFrames.GetData(), sizeof(FVmdObject::FCameraKeyFrame) * CameraKeyFrameCount);
+    VmdParseResult.CameraKeyFrames.Sort([](const FVmdObject::FCameraKeyFrame& A, const FVmdObject::FCameraKeyFrame& B) { return A.FrameNumber < B.FrameNumber; });
 
 	if (ImportVmdTask.ShouldCancel())
 	{
@@ -204,6 +213,7 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	FileReader->Serialize(&LightKeyFrameCount, sizeof(uint32));
 	VmdParseResult.LightKeyFrames.SetNum(LightKeyFrameCount);
 	FileReader->Serialize(VmdParseResult.LightKeyFrames.GetData(), sizeof(FVmdObject::FLightKeyFrame) * LightKeyFrameCount);
+    VmdParseResult.LightKeyFrames.Sort([](const FVmdObject::FLightKeyFrame& A, const FVmdObject::FLightKeyFrame& B) { return A.FrameNumber < B.FrameNumber; });
 
 	if (ImportVmdTask.ShouldCancel())
 	{
@@ -214,6 +224,7 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	FileReader->Serialize(&SelfShadowKeyFrameCount, sizeof(uint32));
 	VmdParseResult.SelfShadowKeyFrames.SetNum(SelfShadowKeyFrameCount);
 	FileReader->Serialize(VmdParseResult.SelfShadowKeyFrames.GetData(), sizeof(FVmdObject::FSelfShadowKeyFrame) * SelfShadowKeyFrameCount);
+    VmdParseResult.SelfShadowKeyFrames.Sort([](const FVmdObject::FSelfShadowKeyFrame& A, const FVmdObject::FSelfShadowKeyFrame& B) { return A.FrameNumber < B.FrameNumber; });
 
 	if (ImportVmdTask.ShouldCancel())
 	{
@@ -245,10 +256,99 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 			FileReader->Serialize(VmdParseResult.PropertyKeyFrames[i].IkStates.GetData(), sizeof(FVmdObject::FPropertyKeyFrame::FIkState) * IkStateCount);
 		}
 	}
+    VmdParseResult.PropertyKeyFrames.Sort([](const FVmdParseResult::FPropertyKeyFrameWithIkState& A, const FVmdParseResult::FPropertyKeyFrameWithIkState& B) { return A.FrameNumber < B.FrameNumber; });
 
 	VmdParseResult.bIsSuccess = true;
 
 	return VmdParseResult;
+}
+
+void FVmdImporter::ImportVmdCamera(
+	const FVmdParseResult& InVmdParseResult,
+    const UMovieSceneSequence* InSequence,
+	ISequencer& InSequencer,
+    const bool bCreateCameras
+)
+{
+	if (InVmdParseResult.CameraKeyFrames.Num() == 0)
+	{
+		return;
+	}
+
+    const bool bNotifySlate = !FApp::IsUnattended() && !GIsRunningUnattendedScript;
+
+
+	TMap<FGuid, FString> ObjectBindingMap;
+
+	InSequencer.GetSelection().GetSelectedOutlinerNodes();
+
+	//for (const TSharedRef<FSequencerDisplayNode>& Node : InSequencer.GetSelection().GetSelectedOutlinerNodes())
+	//{
+	//	/*if (Node->GetType() == ESequencerNode::Object)
+	//	{
+	//		auto ObjectBindingNode = StaticCastSharedRef<FSequencerObjectBindingNode>(Node);
+
+	//		FGuid ObjectBinding = ObjectBindingNode.Get().GetObjectBinding();
+
+	//		ObjectBindingMap.Add(ObjectBinding, ObjectBindingNode.Get().GetDisplayName().ToString());
+	//	}*/
+	//}
+
+    if (bCreateCameras)
+	{
+        UWorld* World = GCurrentLevelEditingViewportClient ? GCurrentLevelEditingViewportClient->GetWorld() : nullptr;
+
+		// Check camera binding
+		
+		for (auto InObjectBinding : ObjectBindingMap)
+		{
+            // ReSharper disable once CppTooWideScopeInitStatement
+            FString ObjectName = InObjectBinding.Value;
+			if (ObjectName == "NodeName")
+			{
+				// Look for a valid bound object, otherwise need to create a new camera and assign this binding to it
+				bool bFoundBoundObject = false;
+				TArrayView<TWeakObjectPtr<>> BoundObjects = InSequencer.FindBoundObjects(InObjectBinding.Key, InSequencer.GetFocusedTemplateID());
+				for (auto BoundObject : BoundObjects)
+				{
+					if (BoundObject.IsValid())
+					{
+						bFoundBoundObject = true;
+						break;
+					}
+				}
+
+				if (!bFoundBoundObject)
+				{
+					if (bNotifySlate)
+					{
+						FNotificationInfo Info(FText::Format(NSLOCTEXT("MovieSceneTools", "NoBoundObjectsError", "Existing binding has no objects. Creating a new camera and binding for {0}"), FText::FromString(ObjectName)));
+						Info.ExpireDuration = 5.0f;
+						FSlateNotificationManager::Get().AddNotification(Info)->SetCompletionState(SNotificationItem::CS_Fail);
+					}
+				}
+			}
+		}
+
+        const FActorSpawnParameters SpawnParams;
+		AActor* NewCamera = World->SpawnActor<ACineCameraActor>(SpawnParams);
+		NewCamera->SetActorLabel("TestCamera1");
+
+		{
+			
+		}
+
+		TArray<TWeakObjectPtr<AActor> > NewCameras;
+		NewCameras.Add(NewCamera);
+        // ReSharper disable once CppTooWideScopeInitStatement
+        TArray<FGuid> NewCameraGuids = InSequencer.AddActors(NewCameras);
+
+		if (NewCameraGuids.Num() != 0)
+		{
+			ObjectBindingMap.Add(NewCameraGuids[0]);
+			ObjectBindingMap[NewCameraGuids[0]] = "MmdCamera1";
+		}
+	}
 }
 
 FArchive* FVmdImporter::OpenFile(const FString FilePath)

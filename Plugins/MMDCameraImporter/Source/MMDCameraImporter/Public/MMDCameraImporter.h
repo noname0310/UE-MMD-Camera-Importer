@@ -23,7 +23,7 @@ private:
 	void UnregisterMenus() const;
 #endif
 	void ImportVmd();
-	bool ImportVmdWIthDialog(UMovieSceneSequence* InSequence, ISequencer& InSequencer, const TMap<FGuid, FString>& InObjectBindingMap, TOptional<bool> bCreateCameras);
+	bool ImportVmdWithDialog(UMovieSceneSequence* InSequence, ISequencer& InSequencer);
 
 private:
 	TSharedPtr<FUICommandList> PluginCommands;

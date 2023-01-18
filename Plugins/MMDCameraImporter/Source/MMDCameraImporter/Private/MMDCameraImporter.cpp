@@ -7,123 +7,16 @@
 #include "MMDCameraImporterCommands.h"
 #include "MMDCameraImporterStyle.h"
 #include "MMDUserImportVMDSettings.h"
+#include "MovieSceneToolHelpers.h"
 #include "ToolMenus.h"
 #include "VMDImporter.h"
 #include "DesktopPlatform/Public/DesktopPlatformModule.h"
 #include "DesktopPlatform/Public/IDesktopPlatform.h"
-#include "LevelSequence/Public/LevelSequence.h"
 #include "Runtime/Launch/Resources/Version.h"
 
 DEFINE_LOG_CATEGORY(LogMMDCameraImporter);
 
 #define LOCTEXT_NAMESPACE "FMmdCameraImporterModule"
-
-//void ImportFBXCamera(UnFbx::FFbxImporter* FbxImporter, UMovieSceneSequence* InSequence, ISequencer& InSequencer, TMap<FGuid, FString>& InObjectBindingMap, bool bMatchByNameOnly, bool bCreateCameras)
-//{
-//    bool bNotifySlate = !FApp::IsUnattended() && !GIsRunningUnattendedScript;
-//
-//    UMovieScene* MovieScene = InSequence->GetMovieScene();
-//
-//    TArray<fbxsdk::FbxCamera*> AllCameras;
-//    MovieSceneToolHelpers::GetCameras(FbxImporter->Scene->GetRootNode(), AllCameras);
-//
-//    if (AllCameras.Num() == 0)
-//    {
-//        return;
-//    }
-//
-//    if (bCreateCameras)
-//    {
-//        UWorld* World = GCurrentLevelEditingViewportClient ? GCurrentLevelEditingViewportClient->GetWorld() : nullptr;
-//
-//        // Find unmatched cameras
-//        TArray<fbxsdk::FbxCamera*> UnmatchedCameras;
-//        for (auto Camera : AllCameras)
-//        {
-//            FString NodeName = MovieSceneToolHelpers::GetCameraName(Camera);
-//
-//            // ReSharper disable once CppTooWideScopeInitStatement
-//            bool bMatched = false;
-//            for (auto InObjectBinding : InObjectBindingMap)
-//            {
-//                // ReSharper disable once CppTooWideScopeInitStatement
-//                FString ObjectName = InObjectBinding.Value;
-//                if (ObjectName == NodeName)
-//                {
-//                    // Look for a valid bound object, otherwise need to create a new camera and assign this binding to it
-//                    bool bFoundBoundObject = false;
-//                    TArrayView<TWeakObjectPtr<>> BoundObjects = InSequencer.FindBoundObjects(InObjectBinding.Key, InSequencer.GetFocusedTemplateID());
-//                    for (auto BoundObject : BoundObjects)
-//                    {
-//                        if (BoundObject.IsValid())
-//                        {
-//                            bFoundBoundObject = true;
-//                            break;
-//                        }
-//                    }
-//
-//                    if (!bFoundBoundObject)
-//                    {
-//                        if (bNotifySlate)
-//                        {
-//                            FNotificationInfo Info(FText::Format(NSLOCTEXT("MovieSceneTools", "NoBoundObjectsError", "Existing binding has no objects. Creating a new camera and binding for {0}"), FText::FromString(ObjectName)));
-//                            Info.ExpireDuration = 5.0f;
-//                            FSlateNotificationManager::Get().AddNotification(Info)->SetCompletionState(SNotificationItem::CS_Fail);
-//                        }
-//                    }
-//                }
-//            }
-//
-//            if (!bMatched)
-//            {
-//                UnmatchedCameras.Add(Camera);
-//            }
-//        }
-//
-//        // If there are new cameras, clear the object binding map so that we're only assigning values to the newly created cameras
-//        if (UnmatchedCameras.Num() != 0)
-//        {
-//            InObjectBindingMap.Reset();
-//            bMatchByNameOnly = true;
-//        }
-//
-//        // Add any unmatched cameras
-//        for (auto UnmatchedCamera : UnmatchedCameras)
-//        {
-//            FString CameraName = MovieSceneToolHelpers::GetCameraName(UnmatchedCamera);
-//
-//            AActor* NewCamera = nullptr;
-//            if (UnmatchedCamera->GetApertureMode() == fbxsdk::FbxCamera::eFocalLength)
-//            {
-//                FActorSpawnParameters SpawnParams;
-//                NewCamera = World->SpawnActor<ACineCameraActor>(SpawnParams);
-//                NewCamera->SetActorLabel(*CameraName);
-//            }
-//            else
-//            {
-//                FActorSpawnParameters SpawnParams;
-//                NewCamera = World->SpawnActor<ACameraActor>(SpawnParams);
-//                NewCamera->SetActorLabel(*CameraName);
-//            }
-//
-//            // Copy camera properties before adding default tracks so that initial camera properties match and can be restored after sequencer finishes
-//            MovieSceneToolHelpers::CopyCameraProperties(UnmatchedCamera, NewCamera);
-//
-//            TArray<TWeakObjectPtr<AActor> > NewCameras;
-//            NewCameras.Add(NewCamera);
-//            // ReSharper disable once CppTooWideScopeInitStatement
-//            TArray<FGuid> NewCameraGuids = InSequencer.AddActors(NewCameras);
-//
-//            if (NewCameraGuids.Num())
-//            {
-//                InObjectBindingMap.Add(NewCameraGuids[0]);
-//                InObjectBindingMap[NewCameraGuids[0]] = CameraName;
-//            }
-//        }
-//    }
-//
-//    MovieSceneToolHelpers::ImportFBXCameraToExisting(FbxImporter, InSequence, &InSequencer, InSequencer.GetFocusedTemplateID(), InObjectBindingMap, bMatchByNameOnly, true);
-//}
 
 // ReSharper disable once CppClassNeedsConstructorBecauseOfUninitializedMember
 class SMovieSceneImportVmdSettings final : public SCompoundWidget, public FGCObject
@@ -188,17 +81,7 @@ class SMovieSceneImportVmdSettings final : public SCompoundWidget, public FGCObj
 	{
 		return TEXT("SMovieSceneImportVmdSettings");
 	}
-
-	void SetObjectBindingMap(const TMap<FGuid, FString>& InObjectBindingMap)
-	{
-		ObjectBindingMap = InObjectBindingMap;
-	}
-
-	void SetCreateCameras(const TOptional<bool> bInCreateCameras)
-	{
-		bCreateCameras = bInCreateCameras;
-	}
-
+	
 private:
 
 	FReply OnImportVmdClicked()
@@ -221,21 +104,20 @@ private:
 
 		const FScopedTransaction Transaction(LOCTEXT("ImportVMDTransaction", "Import VMD"));
 		
-        // ReSharper disable once CppUseStructuredBinding
         const FVmdParseResult ParseResult = VmdImporter.ParseVmdFile();
-        UE_LOG(LogMMDCameraImporter, Warning, TEXT("VMD Parse Result: %s"), ParseResult.bIsSuccess ? TEXT("true") : TEXT("false"));
-		UE_LOG(LogMMDCameraImporter, Warning, TEXT("Bone Key Count: %d"), ParseResult.BoneKeyFrames.Num());
-		UE_LOG(LogMMDCameraImporter, Warning, TEXT("Morph Key Count: %d"), ParseResult.MorphKeyFrames.Num());
-		UE_LOG(LogMMDCameraImporter, Warning, TEXT("Camera Key Count: %d"), ParseResult.CameraKeyFrames.Num());
-        UE_LOG(LogMMDCameraImporter, Warning, TEXT("Light Key Count: %d"), ParseResult.LightKeyFrames.Num());
-        UE_LOG(LogMMDCameraImporter, Warning, TEXT("Self Shadow Key Count: %d"), ParseResult.SelfShadowKeyFrames.Num());
-        UE_LOG(LogMMDCameraImporter, Warning, TEXT("Property Key Count: %d"), ParseResult.PropertyKeyFrames.Num());
 
-		//Import static cameras first
-		// ImportFBXCamera(FbxImporter, Sequence, *Sequencer, ObjectBindingMap, bMatchByNameOnly, bCreateCameras.IsSet() ? bCreateCameras.GetValue() : ImportVmdSettings->bCreateCameras);
+        if (!ParseResult.bIsSuccess)
+        {
+			return FReply::Unhandled();
+        }
 
-		UWorld* World = Cast<UWorld>(Sequencer->GetPlaybackContext());
-		const bool bValid = true; // MovieSceneToolHelpers::ImportFBXIfReady(World, Sequence, Sequencer, Sequencer->GetFocusedTemplateID(), ObjectBindingMap, ImportVmdSettings, InOutParams);
+		UE_LOG(LogMMDCameraImporter, Log, TEXT("bCreateCameras: %d"), ImportVmdSettings->bCreateCameras);
+
+        FVmdImporter::ImportVmdCamera(
+			ParseResult,
+			Sequence,
+			*Sequencer,
+			ImportVmdSettings->bCreateCameras);
 
 		Sequencer->NotifyMovieSceneDataChanged(EMovieSceneDataChangeType::MovieSceneStructureItemAdded);
 
@@ -244,7 +126,7 @@ private:
 			Window->RequestDestroyWindow();
 		}
 
-		return bValid ? FReply::Handled() : FReply::Unhandled();
+		return FReply::Handled();
 	}
 
 	TSharedPtr<IDetailsView> DetailView;
@@ -253,8 +135,6 @@ private:
 	UMovieSceneSequence* Sequence;
 	// ReSharper disable once CppUninitializedNonStaticDataMember
 	ISequencer* Sequencer;
-	TMap<FGuid, FString> ObjectBindingMap;
-	TOptional<bool> bCreateCameras;
 };
 
 void FMmdCameraImporterModule::StartupModule()
@@ -359,13 +239,11 @@ void FMmdCameraImporterModule::ImportVmd()
 	}
 	const TSharedPtr<ISequencer> Sequencer = WeakSequencer.Pin();
 
-	const TMap<FGuid, FString> ObjectBindingNameMap;
-
-	ImportVmdWIthDialog(Sequencer->GetFocusedMovieSceneSequence(), *Sequencer.Get(), ObjectBindingNameMap, TOptional(false));
+	ImportVmdWithDialog(Sequencer->GetFocusedMovieSceneSequence(), *Sequencer.Get());
 }
 
 // ReSharper disable once CppMemberFunctionMayBeConst
-bool FMmdCameraImporterModule::ImportVmdWIthDialog(UMovieSceneSequence* InSequence, ISequencer& InSequencer, const TMap<FGuid, FString>& InObjectBindingMap, TOptional<bool> bCreateCameras)
+bool FMmdCameraImporterModule::ImportVmdWithDialog(UMovieSceneSequence* InSequence, ISequencer& InSequencer)
 {
 	TArray<FString> OpenFileNames;
 	IDesktopPlatform* DesktopPlatform = FDesktopPlatformModule::Get();
@@ -410,8 +288,6 @@ bool FMmdCameraImporterModule::ImportVmdWIthDialog(UMovieSceneSequence* InSequen
 		.ImportFilename(OpenFileNames[0])
 		.Sequence(InSequence)
 		.Sequencer(&InSequencer);
-	DialogWidget->SetObjectBindingMap(InObjectBindingMap);
-	DialogWidget->SetCreateCameras(bCreateCameras);
 	Window->SetContent(DialogWidget);
 
 	FSlateApplication::Get().AddWindow(Window);

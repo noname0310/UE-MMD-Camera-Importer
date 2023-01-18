@@ -1,5 +1,6 @@
 ﻿// Copyright Epic Games, Inc. All Rights Reserved.
 
+using System.IO;
 using UnrealBuildTool;
 
 public class MMDCameraImporter : ModuleRules
@@ -7,16 +8,21 @@ public class MMDCameraImporter : ModuleRules
     public MMDCameraImporter(ReadOnlyTargetRules Target) : base(Target)
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
-
+        
+        var engineSourceDirectory = Path.GetFullPath(Target.RelativeEnginePath);
+        
         PublicIncludePaths.AddRange(
-            new string[] {
+            new string[]
+            {
                 // ... add public include paths required here ...
             }
         );
 
 
         PrivateIncludePaths.AddRange(
-            new string[] {
+            new string[]
+            {
+                Path.Combine(engineSourceDirectory, "Source/Editor/Sequencer/Private"),
                 // ... add other private include paths required here ...
             }
         );
@@ -48,6 +54,7 @@ public class MMDCameraImporter : ModuleRules
                 "MovieSceneTools",
                 "LevelSequenceEditor",
                 "DesktopPlatform",
+                "CinematicCamera",
                 // ... add private dependencies that you statically link with here ...	
             }
         );

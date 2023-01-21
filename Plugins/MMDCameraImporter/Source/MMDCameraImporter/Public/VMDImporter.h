@@ -123,13 +123,31 @@ public:
 
 	static void ImportVmdCamera(
 		const FVmdParseResult& InVmdParseResult,
-        const UMovieSceneSequence* InSequence,
+        UMovieSceneSequence* InSequence,
 		ISequencer& InSequencer,
 		const bool bCreateCameras
 	);
 
+	static void ImportVmdCameraToExisting(
+        const FVmdParseResult& InVmdParseResult,
+        UMovieSceneSequence* InSequence,
+        IMovieScenePlayer* Player,
+        FMovieSceneSequenceIDRef TemplateID,
+		const FGuid MmdCameraGuid,
+		const FGuid MmdCameraCenterGuid
+    );
+
 private:
 	static FArchive* OpenFile(FString FilePath);
+	static float ComputeFocalLength(const float FieldOfView, const float SensorWidth);
+
+    static FGuid GetHandleToObject(
+		UObject* InObject,
+		UMovieSceneSequence* InSequence,
+		IMovieScenePlayer* Player,
+		FMovieSceneSequenceIDRef TemplateID,
+		bool bCreateIfMissing
+	);
 
 private:
 	FString FilePath;

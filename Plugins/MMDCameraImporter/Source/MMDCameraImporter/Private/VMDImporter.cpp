@@ -3,14 +3,16 @@
 #include "VMDImporter.h"
 
 #include "CineCameraActor.h"
+#include "CineCameraComponent.h"
 #include "ISequencerModule.h"
 #include "LevelEditorViewport.h"
 #include "MMDCameraImporter.h"
 #include "MMDImportHelper.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Misc/ScopedSlowTask.h"
+#include "Sections/MovieSceneFloatSection.h"
+#include "Tracks/MovieSceneFloatTrack.h"
 #include "Widgets/Notifications/SNotificationList.h"
-#include "SequencerSelection.h"
 
 #define LOCTEXT_NAMESPACE "FMmdCameraImporterModule"
 
@@ -265,90 +267,170 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 
 void FVmdImporter::ImportVmdCamera(
 	const FVmdParseResult& InVmdParseResult,
-	const UMovieSceneSequence* InSequence,
+	UMovieSceneSequence* InSequence,
 	ISequencer& InSequencer,
 	const bool bCreateCameras
 )
 {
+	const bool bNotifySlate = !FApp::IsUnattended() && !GIsRunningUnattendedScript;
+
 	if (InVmdParseResult.CameraKeyFrames.Num() == 0)
 	{
+		UE_LOG(LogMMDCameraImporter, Warning, TEXT("This VMD file is not camera motion"));
+
+		if (bNotifySlate)
+		{
+			FNotificationInfo Info(LOCTEXT("NoCameraMotionError", "This VMD file is not camera motion"));
+			Info.ExpireDuration = 5.0f;
+			FSlateNotificationManager::Get().AddNotification(Info)->SetCompletionState(SNotificationItem::CS_Fail);
+		}
+
 		return;
 	}
 
-	const bool bNotifySlate = !FApp::IsUnattended() && !GIsRunningUnattendedScript;
-
-
-	TMap<FGuid, FString> ObjectBindingMap;
-
-	FSequencerSelection& SequencerSelection = InSequencer.GetSelection();
-
-	SequencerSelection.GetSelectedOutlinerNodes();
-
-	//for (const TSharedRef<FSequencerDisplayNode>& Node : InSequencer.GetSelection().GetSelectedOutlinerNodes())
-	//{
-	//	/*if (Node->GetType() == ESequencerNode::Object)
-	//	{
-	//		auto ObjectBindingNode = StaticCastSharedRef<FSequencerObjectBindingNode>(Node);
-
-	//		FGuid ObjectBinding = ObjectBindingNode.Get().GetObjectBinding();
-
-	//		ObjectBindingMap.Add(ObjectBinding, ObjectBindingNode.Get().GetDisplayName().ToString());
-	//	}*/
-	//}
+	FGuid MmdCameraGuid;
+	FGuid MmdCameraCenterGuid;
 
 	if (bCreateCameras)
 	{
 		UWorld* World = GCurrentLevelEditingViewportClient ? GCurrentLevelEditingViewportClient->GetWorld() : nullptr;
+		check(World != nullptr && "World is null");
 
-		// Check camera binding
-		
-		for (auto InObjectBinding : ObjectBindingMap)
-		{
-			// ReSharper disable once CppTooWideScopeInitStatement
-			FString ObjectName = InObjectBinding.Value;
-			if (ObjectName == "NodeName")
-			{
-				// Look for a valid bound object, otherwise need to create a new camera and assign this binding to it
-				bool bFoundBoundObject = false;
-				TArrayView<TWeakObjectPtr<>> BoundObjects = InSequencer.FindBoundObjects(InObjectBinding.Key, InSequencer.GetFocusedTemplateID());
-				for (auto BoundObject : BoundObjects)
-				{
-					if (BoundObject.IsValid())
-					{
-						bFoundBoundObject = true;
-						break;
-					}
-				}
+		FActorSpawnParameters CameraCenterSpawnParams;
+		CameraCenterSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AActor* NewCameraCenter = World->SpawnActor<AActor>(CameraCenterSpawnParams);
+		NewCameraCenter->SetActorLabel("MmdCameraCenter");
+		USceneComponent* RootSceneComponent = NewObject<USceneComponent>(NewCameraCenter, TEXT("SceneComponent"));
+		NewCameraCenter->SetRootComponent(RootSceneComponent);
+		NewCameraCenter->AddInstanceComponent(RootSceneComponent);
 
-				if (!bFoundBoundObject)
-				{
-					if (bNotifySlate)
-					{
-						FNotificationInfo Info(FText::Format(NSLOCTEXT("MovieSceneTools", "NoBoundObjectsError", "Existing binding has no objects. Creating a new camera and binding for {0}"), FText::FromString(ObjectName)));
-						Info.ExpireDuration = 5.0f;
-						FSlateNotificationManager::Get().AddNotification(Info)->SetCompletionState(SNotificationItem::CS_Fail);
-					}
-				}
-			}
-		}
+		FActorSpawnParameters CameraSpawnParams;
+		CameraSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		ACineCameraActor* NewCamera = World->SpawnActor<ACineCameraActor>(CameraSpawnParams);
+		NewCamera->SetActorLabel("MmdCamera");
 
-		const FActorSpawnParameters SpawnParams;
-		AActor* NewCamera = World->SpawnActor<ACineCameraActor>(SpawnParams);
-		NewCamera->SetActorLabel("TestCamera1");
+		NewCamera->AttachToActor(NewCameraCenter, FAttachmentTransformRules(EAttachmentRule::KeepWorld, true));
 
 		{
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame FirstFrame = InVmdParseResult.CameraKeyFrames[0];
 			
+			NewCamera->SetActorRelativeLocation(FVector(FirstFrame.Distance, 0, 0));
+
+			// Position:
+			// X -> Y
+			// Y -> Z
+			// Z -> X
+			NewCameraCenter->SetActorRelativeLocation(
+				FVector(
+					FirstFrame.Position[2],
+					FirstFrame.Position[0],
+					FirstFrame.Position[1]));
+
+			// Rotation:
+			// X -> Y
+			// Y -> Z
+			// Z -> X
+			NewCameraCenter->SetActorRelativeRotation(
+				FRotator(
+					FirstFrame.Rotation[2],
+					FirstFrame.Rotation[0],
+					FirstFrame.Rotation[1]));
+
+			UCineCameraComponent* CineCameraComponent = NewCamera->GetCineCameraComponent();
+
+			CineCameraComponent->CurrentFocalLength =
+				ComputeFocalLength(FirstFrame.ViewAngle, CineCameraComponent->Filmback.SensorWidth);
 		}
 
-		TArray<TWeakObjectPtr<AActor> > NewCameras;
-		NewCameras.Add(NewCamera);
-		// ReSharper disable once CppTooWideScopeInitStatement
-		TArray<FGuid> NewCameraGuids = InSequencer.AddActors(NewCameras);
+		TArray<TWeakObjectPtr<AActor>> NewActors;
+		NewActors.Add(NewCameraCenter);
+		NewActors.Add(NewCamera);
+		TArray<FGuid> NewActorGuids = InSequencer.AddActors(NewActors);
 
-		if (NewCameraGuids.Num() != 0)
+		MmdCameraCenterGuid = NewActorGuids[0];
+		MmdCameraGuid = NewActorGuids[1];
+	}
+
+	ImportVmdCameraToExisting(
+		InVmdParseResult,
+		InSequence,
+		&InSequencer,
+		InSequencer.GetFocusedTemplateID(),
+		MmdCameraGuid,
+		MmdCameraCenterGuid);
+}
+
+void FVmdImporter::ImportVmdCameraToExisting(
+	const FVmdParseResult& InVmdParseResult,
+	UMovieSceneSequence* InSequence,
+	IMovieScenePlayer* Player,
+	FMovieSceneSequenceIDRef TemplateID,
+    const FGuid MmdCameraGuid,
+    const FGuid MmdCameraCenterGuid
+)
+{
+	UMovieScene* MovieScene = InSequence->GetMovieScene();
+
+    const TArrayView<TWeakObjectPtr<>> BoundObjects = Player->FindBoundObjects(MmdCameraGuid, TemplateID);
+	
+
+	for (TWeakObjectPtr<>& WeakObject : BoundObjects)
+	{
+        // ReSharper disable once CppTooWideScopeInitStatement
+        UObject* FoundObject = WeakObject.Get();
+
+		if (FoundObject && FoundObject->GetClass()->IsChildOf(ACineCameraActor::StaticClass()))
 		{
-			ObjectBindingMap.Add(NewCameraGuids[0]);
-			ObjectBindingMap[NewCameraGuids[0]] = "MmdCamera1";
+		    //	CopyCameraProperties(CameraNode, Cast<AActor>(FoundObject));
+            const ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(FoundObject);
+		    UCameraComponent* CameraComponent = CineCameraActor->GetCineCameraComponent();
+
+		    FName TrackName = TEXT("CurrentFocalLength");
+            // ReSharper disable once CppTooWideScope
+            // ReSharper disable once CppLocalVariableMayBeConst
+            float TrackValue = 1312.0f;
+
+			// Set the default value of the current focal length or field of view section
+			//FGuid PropertyOwnerGuid = Player->GetHandleToObject(CameraComponent);
+			FGuid PropertyOwnerGuid = GetHandleToObject(CameraComponent, InSequence, Player, TemplateID, true);
+
+			if (!PropertyOwnerGuid.IsValid())
+			{
+				continue;
+			}
+
+			// If copying properties to a spawnable object, the template object must be updated
+            // ReSharper disable once CppTooWideScope
+            FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(MmdCameraGuid);
+			if (Spawnable)
+			{
+				Spawnable->CopyObjectTemplate(*FoundObject, *InSequence);
+			}
+
+            // ReSharper disable once CppTooWideScope
+            UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(PropertyOwnerGuid, TrackName);
+			if (FloatTrack)
+			{
+				FloatTrack->Modify();
+				FloatTrack->RemoveAllAnimationData();
+
+				bool bSectionAdded = false;
+				UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(FloatTrack->FindOrAddSection(0, bSectionAdded));
+				if (!FloatSection)
+				{
+					continue;
+				}
+
+				FloatSection->Modify();
+
+				if (bSectionAdded)
+				{
+					FloatSection->SetRange(TRange<FFrameNumber>::All());
+				}
+
+				FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0)->SetDefault(TrackValue);
+			}
 		}
 	}
 }
@@ -356,6 +438,63 @@ void FVmdImporter::ImportVmdCamera(
 FArchive* FVmdImporter::OpenFile(const FString FilePath)
 {
 	return IFileManager::Get().CreateFileReader(*FilePath);
+}
+
+float FVmdImporter::ComputeFocalLength(const float FieldOfView, const float SensorWidth)
+{
+	// Focal Length = (Film or sensor width) / (2 * tan(FOV / 2))
+	return SensorWidth / (2 * FMath::Tan(FieldOfView / 2));
+}
+
+FGuid FVmdImporter::GetHandleToObject(
+	UObject* InObject,
+	UMovieSceneSequence* InSequence,
+	IMovieScenePlayer* Player,
+	FMovieSceneSequenceIDRef TemplateID,
+    const bool bCreateIfMissing
+)
+{
+	UMovieScene* MovieScene = InSequence->GetMovieScene();
+
+	// Attempt to resolve the object through the movie scene instance first, 
+	FGuid PropertyOwnerGuid = FGuid();
+	if (InObject != nullptr && !MovieScene->IsReadOnly())
+	{
+        // ReSharper disable once CppTooWideScopeInitStatement
+        const FGuid ObjectGuid = Player->FindObjectId(*InObject, TemplateID);
+		if (ObjectGuid.IsValid())
+		{
+			// Check here for spawnable otherwise spawnables get recreated as possessables, which doesn't make sense
+            // ReSharper disable once CppTooWideScope
+            const FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(ObjectGuid);
+			if (Spawnable)
+			{
+				PropertyOwnerGuid = ObjectGuid;
+			}
+			else
+			{
+                // ReSharper disable once CppTooWideScope
+                const FMovieScenePossessable* Possessable = MovieScene->FindPossessable(ObjectGuid);
+				if (Possessable)
+				{
+					PropertyOwnerGuid = ObjectGuid;
+				}
+			}
+		}
+	}
+
+	if (PropertyOwnerGuid.IsValid())
+	{
+		return PropertyOwnerGuid;
+	}
+
+	if (bCreateIfMissing)
+	{
+		// Otherwise, create a possessable for this object. Note this will handle creating the parent possessables if this is a component.
+		PropertyOwnerGuid = InSequence->CreatePossessable(InObject);
+	}
+
+	return PropertyOwnerGuid;
 }
 
 #undef LOCTEXT_NAMESPACE

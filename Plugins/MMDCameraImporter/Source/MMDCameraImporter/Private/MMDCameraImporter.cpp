@@ -111,8 +111,6 @@ private:
 			return FReply::Unhandled();
         }
 
-		UE_LOG(LogMMDCameraImporter, Log, TEXT("bCreateCameras: %d"), ImportVmdSettings->bCreateCameras);
-
         FVmdImporter::ImportVmdCamera(
 			ParseResult,
 			Sequence,
@@ -280,7 +278,7 @@ bool FMmdCameraImporterModule::ImportVmdWithDialog(UMovieSceneSequence* InSequen
 		.Title(TitleText)
 		.HasCloseButton(true)
 		.SizingRule(ESizingRule::UserSized)
-		.ClientSize(FVector2D(450.0f, 300.0f))
+		.ClientSize(FVector2D(400.0f, 150.0f))
 		.AutoCenter(EAutoCenter::PreferredWorkArea)
 		.SupportsMinimize(false);
 

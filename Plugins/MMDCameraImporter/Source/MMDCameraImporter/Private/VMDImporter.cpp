@@ -6,11 +6,14 @@
 #include "CineCameraComponent.h"
 #include "ISequencerModule.h"
 #include "LevelEditorViewport.h"
+#include "MatineeImportTools.h"
 #include "MMDCameraImporter.h"
 #include "MMDImportHelper.h"
+#include "MovieSceneToolHelpers.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Misc/ScopedSlowTask.h"
 #include "Sections/MovieSceneFloatSection.h"
+#include "Tracks/MovieScene3DTransformTrack.h"
 #include "Tracks/MovieSceneFloatTrack.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
@@ -269,7 +272,7 @@ void FVmdImporter::ImportVmdCamera(
 	const FVmdParseResult& InVmdParseResult,
 	UMovieSceneSequence* InSequence,
 	ISequencer& InSequencer,
-	const bool bCreateCameras
+    const UMmdUserImportVmdSettings* ImportVmdSettings
 )
 {
 	const bool bNotifySlate = !FApp::IsUnattended() && !GIsRunningUnattendedScript;
@@ -291,7 +294,7 @@ void FVmdImporter::ImportVmdCamera(
 	FGuid MmdCameraGuid;
 	FGuid MmdCameraCenterGuid;
 
-	if (bCreateCameras)
+	if (ImportVmdSettings->bCreateCameras)
 	{
 		UWorld* World = GCurrentLevelEditingViewportClient ? GCurrentLevelEditingViewportClient->GetWorld() : nullptr;
 		check(World != nullptr && "World is null");
@@ -358,7 +361,13 @@ void FVmdImporter::ImportVmdCamera(
 		&InSequencer,
 		InSequencer.GetFocusedTemplateID(),
 		MmdCameraGuid,
-		MmdCameraCenterGuid);
+		MmdCameraCenterGuid,
+		ImportVmdSettings);
+}
+
+FArchive* FVmdImporter::OpenFile(const FString FilePath)
+{
+	return IFileManager::Get().CreateFileReader(*FilePath);
 }
 
 void FVmdImporter::ImportVmdCameraToExisting(
@@ -366,30 +375,31 @@ void FVmdImporter::ImportVmdCameraToExisting(
 	UMovieSceneSequence* InSequence,
 	IMovieScenePlayer* Player,
 	FMovieSceneSequenceIDRef TemplateID,
-    const FGuid MmdCameraGuid,
-    const FGuid MmdCameraCenterGuid
+	const FGuid MmdCameraGuid,
+	const FGuid MmdCameraCenterGuid,
+	const UMmdUserImportVmdSettings* ImportVmdSettings
 )
 {
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
 
-    const TArrayView<TWeakObjectPtr<>> BoundObjects = Player->FindBoundObjects(MmdCameraGuid, TemplateID);
-	
+	const TArrayView<TWeakObjectPtr<>> BoundObjects = Player->FindBoundObjects(MmdCameraGuid, TemplateID);
+
 
 	for (TWeakObjectPtr<>& WeakObject : BoundObjects)
 	{
-        // ReSharper disable once CppTooWideScopeInitStatement
-        UObject* FoundObject = WeakObject.Get();
+		// ReSharper disable once CppTooWideScopeInitStatement
+		UObject* FoundObject = WeakObject.Get();
 
 		if (FoundObject && FoundObject->GetClass()->IsChildOf(ACineCameraActor::StaticClass()))
 		{
-		    //	CopyCameraProperties(CameraNode, Cast<AActor>(FoundObject));
-            const ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(FoundObject);
-		    UCameraComponent* CameraComponent = CineCameraActor->GetCineCameraComponent();
+			//	CopyCameraProperties(CameraNode, Cast<AActor>(FoundObject));
+			const ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(FoundObject);
+			UCameraComponent* CameraComponent = CineCameraActor->GetCineCameraComponent();
 
-		    FName TrackName = TEXT("CurrentFocalLength");
-            // ReSharper disable once CppTooWideScope
-            // ReSharper disable once CppLocalVariableMayBeConst
-            float TrackValue = 1312.0f;
+			FName TrackName = TEXT("CurrentFocalLength");
+			// ReSharper disable once CppTooWideScope
+			// ReSharper disable once CppLocalVariableMayBeConst
+			float TrackValue = 1312.0f;
 
 			// Set the default value of the current focal length or field of view section
 			//FGuid PropertyOwnerGuid = Player->GetHandleToObject(CameraComponent);
@@ -401,15 +411,15 @@ void FVmdImporter::ImportVmdCameraToExisting(
 			}
 
 			// If copying properties to a spawnable object, the template object must be updated
-            // ReSharper disable once CppTooWideScope
-            FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(MmdCameraGuid);
+			// ReSharper disable once CppTooWideScope
+			FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(MmdCameraGuid);
 			if (Spawnable)
 			{
 				Spawnable->CopyObjectTemplate(*FoundObject, *InSequence);
 			}
 
-            // ReSharper disable once CppTooWideScope
-            UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(PropertyOwnerGuid, TrackName);
+			// ReSharper disable once CppTooWideScope
+			UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(PropertyOwnerGuid, TrackName);
 			if (FloatTrack)
 			{
 				FloatTrack->Modify();
@@ -435,9 +445,141 @@ void FVmdImporter::ImportVmdCameraToExisting(
 	}
 }
 
-FArchive* FVmdImporter::OpenFile(const FString FilePath)
+template<typename ChannelType>
+static void ImportTransformChannelToBezierChannel(
+	const FRichCurve& Source,
+	ChannelType* Dest,
+	FFrameRate DestFrameRate,
+    const bool bNegateTangents,
+    const bool bClearChannel,
+    const FFrameNumber StartFrame = 0,
+    const bool bNegateValue = false
+)
 {
-	return IFileManager::Get().CreateFileReader(*FilePath);
+	// If there are no keys, don't clear the existing channel
+	if (!Source.GetNumKeys())
+	{
+		return;
+	}
+
+	TMovieSceneChannelData<typename ChannelType::ChannelValueType> ChannelData = Dest->GetData();
+
+	if (bClearChannel)
+	{
+		ChannelData.Reset();
+	}
+	for (auto SourceIt = Source.GetKeyHandleIterator(); SourceIt; ++SourceIt)
+	{
+		const FRichCurveKey Key = Source.GetKey(*SourceIt);
+		float ArriveTangent = Key.ArriveTangent;
+		float LeaveTangent = Key.LeaveTangent;
+		if (bNegateTangents)
+		{
+			ArriveTangent = -ArriveTangent;
+			LeaveTangent = -LeaveTangent;
+		}
+
+        const FFrameNumber KeyTime = (Key.Time * DestFrameRate).RoundToFrame();
+		float Value = !bNegateValue ? Key.Value : -Key.Value;
+		FMatineeImportTools::SetOrAddKey(ChannelData, KeyTime + StartFrame, Value, ArriveTangent, LeaveTangent,
+			MovieSceneToolHelpers::RichCurveInterpolationToMatineeInterpolation(Key.InterpMode, Key.TangentMode), DestFrameRate, Key.TangentWeightMode,
+			Key.ArriveTangentWeight, Key.LeaveTangentWeight);
+
+	}
+
+	Dest->AutoSetTangents();
+}
+
+void ImportTransformChannelToDouble(
+	const FRichCurve& Source,
+	FMovieSceneDoubleChannel* Dest,
+    const FFrameRate DestFrameRate,
+    const bool bNegateTangents,
+    const bool bClearChannel,
+    const FFrameNumber StartFrame = 0,
+    const bool bNegateValue = false
+)
+{
+	ImportTransformChannelToBezierChannel(Source, Dest, DestFrameRate, bNegateTangents, bClearChannel, StartFrame, bNegateValue);
+}
+
+bool FVmdImporter::ImportVmdCameraTransform(
+	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+    const FGuid ObjectBinding,
+	const UMovieSceneSequence* InSequence,
+	const UMmdUserImportVmdSettings* ImportVmdSettings
+)
+{
+	UMovieScene* MovieScene = InSequence->GetMovieScene();
+
+	// Look for transforms explicitly
+	FRichCurve Translation[3];
+	FRichCurve EulerRotation[3];
+	FRichCurve Scale[3];
+	FTransform DefaultTransform;
+	GetConvertedCameraTransformCurveData(
+		CameraKeyFrames,
+		Translation[0], Translation[1], Translation[2],
+		EulerRotation[0], EulerRotation[1], EulerRotation[2],
+		Scale[0], Scale[1], Scale[2],
+		DefaultTransform,
+		ImportVmdSettings->ImportUniformScale);
+
+	UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+	if (!TransformTrack)
+	{
+		MovieScene->Modify();
+		TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+	}
+	TransformTrack->Modify();
+
+	bool bSectionAdded = false;
+	UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->FindOrAddSection(0, bSectionAdded));
+	if (!TransformSection)
+	{
+		return false;
+	}
+
+	TransformSection->Modify();
+
+	if (bSectionAdded)
+	{
+		TransformSection->SetRange(TRange<FFrameNumber>::All());
+	}
+
+    const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+
+    const FVector Location = DefaultTransform.GetLocation();
+	const FVector Rotation = DefaultTransform.GetRotation().Euler();
+	const FVector Scale3D = DefaultTransform.GetScale3D();
+
+    const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
+
+	Channels[0]->SetDefault(Location.X);
+	Channels[1]->SetDefault(Location.Y);
+	Channels[2]->SetDefault(Location.Z);
+
+	Channels[3]->SetDefault(Rotation.X);
+	Channels[4]->SetDefault(Rotation.Y);
+	Channels[5]->SetDefault(Rotation.Z);
+
+	Channels[6]->SetDefault(Scale3D.X);
+	Channels[7]->SetDefault(Scale3D.Y);
+	Channels[8]->SetDefault(Scale3D.Z);
+
+	ImportTransformChannelToDouble(Translation[0], Channels[0], FrameRate, false, true);
+	ImportTransformChannelToDouble(Translation[1], Channels[1], FrameRate, false, true);
+	ImportTransformChannelToDouble(Translation[2], Channels[2], FrameRate, false, true);
+
+	ImportTransformChannelToDouble(EulerRotation[0], Channels[3], FrameRate, false, true);
+	ImportTransformChannelToDouble(EulerRotation[1], Channels[4], FrameRate, false, true);
+	ImportTransformChannelToDouble(EulerRotation[2], Channels[5], FrameRate, false, true);
+
+	ImportTransformChannelToDouble(Scale[0], Channels[6], FrameRate, false, true);
+	ImportTransformChannelToDouble(Scale[1], Channels[7], FrameRate, false, true);
+	ImportTransformChannelToDouble(Scale[2], Channels[8], FrameRate, false, true);
+
+	return true;
 }
 
 float FVmdImporter::ComputeFocalLength(const float FieldOfView, const float SensorWidth)
@@ -495,6 +637,107 @@ FGuid FVmdImporter::GetHandleToObject(
 	}
 
 	return PropertyOwnerGuid;
+}
+
+void FVmdImporter::GetConvertedCameraTransformCurveData(
+	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+    FRichCurve& OutTranslationX, FRichCurve& OutTranslationY, FRichCurve& OutTranslationZ,
+    FRichCurve& OutEulerRotationX, FRichCurve& OutEulerRotationY, FRichCurve& OutEulerRotationZ,
+	FRichCurve& OutScaleX, FRichCurve& OutScaleY, FRichCurve& OutScaleZ,
+	FTransform& OutDefaultTransform,
+	float UniformScale
+)
+{
+//	const FFbxAnimNodeHandle& AnimNodeHandle = AnimNodeKvp.Value;
+//	FFbxAnimCurveHandle TransformCurves[9];
+//	for (auto NodePropertyKvp : AnimNodeHandle.NodeProperties)
+//	{
+//		FFbxAnimPropertyHandle& AnimPropertyHandle = NodePropertyKvp.Value;
+//		for (FFbxAnimCurveHandle& CurveHandle : AnimPropertyHandle.CurveHandles)
+//		{
+//			if (CurveHandle.CurveType != FFbxAnimCurveHandle::NotTransform)
+//			{
+//				TransformCurves[(int32)(CurveHandle.CurveType)] = CurveHandle;
+//			}
+//		}
+//	}
+//	constexpr bool bNegate = true;
+//	GetCurveData(TransformCurves[0], TranslationX, !bNegate, UniformScale);
+//	GetCurveData(TransformCurves[1], TranslationY, bNegate, UniformScale);
+//	GetCurveData(TransformCurves[2], TranslationZ, !bNegate, UniformScale);
+//
+//	GetCurveData(TransformCurves[3], EulerRotationX, !bNegate);
+//	GetCurveData(TransformCurves[4], EulerRotationY, bNegate);
+//	GetCurveData(TransformCurves[5], EulerRotationZ, bNegate);
+//
+//	GetCurveData(TransformCurves[6], ScaleX, !bNegate, UniformScale);
+//	GetCurveData(TransformCurves[7], ScaleY, !bNegate, UniformScale);
+//	GetCurveData(TransformCurves[8], ScaleZ, !bNegate, UniformScale);
+//	
+//
+//	if (bIsCamera)
+//	{
+//		// The RichCurve code doesn't differentiate between angles and other data, so an interpolation from 179 to -179
+//		// will cause the camera to rotate all the way around through 0 degrees.  So here we make a second pass over the 
+//		// Euler track to convert the angles into a more interpolation-friendly format.  
+//		float CurrentAngleOffset[3] = { 0.f, 0.f, 0.f };
+//
+//		auto EulerRotXIt = EulerRotationX.GetKeyHandleIterator();
+//		auto EulerRotYIt = EulerRotationY.GetKeyHandleIterator();
+//		auto EulerRotZIt = EulerRotationZ.GetKeyHandleIterator();
+//
+//		FVector PreviousOutVal;
+//		FVector CurrentOutVal;
+//		bool bFirst = true;
+//		while (EulerRotXIt && EulerRotYIt && EulerRotZIt)
+//		{
+//			float X = EulerRotationX.GetKeyValue(*EulerRotXIt);;
+//			float Y = EulerRotationY.GetKeyValue(*EulerRotYIt);
+//			float Z = EulerRotationZ.GetKeyValue(*EulerRotZIt);
+//
+//			if (!bFirst)
+//			{
+//				PreviousOutVal = CurrentOutVal;
+//				CurrentOutVal = FVector(X, Y, Z);
+//			}
+//			else
+//			{
+//				CurrentOutVal = FVector(X, Y, Z);
+//				bFirst = false;
+//			}
+//
+//			for (int32 AxisIndex = 0; AxisIndex < 3; ++AxisIndex)
+//			{
+//				float DeltaAngle = (CurrentOutVal[AxisIndex] + CurrentAngleOffset[AxisIndex]) - PreviousOutVal[AxisIndex];
+//
+//				if (DeltaAngle >= 180)
+//				{
+//					CurrentAngleOffset[AxisIndex] -= 360;
+//				}
+//				else if (DeltaAngle <= -180)
+//				{
+//					CurrentAngleOffset[AxisIndex] += 360;
+//				}
+//
+//				CurrentOutVal[AxisIndex] += CurrentAngleOffset[AxisIndex];
+//			}
+//			EulerRotationX.SetKeyValue(*EulerRotXIt, CurrentOutVal.X, false);
+//			EulerRotationY.SetKeyValue(*EulerRotYIt, CurrentOutVal.Y, false);
+//			EulerRotationZ.SetKeyValue(*EulerRotZIt, CurrentOutVal.Z, false);
+//
+//			++EulerRotXIt;
+//			++EulerRotYIt;
+//			++EulerRotZIt;
+//		}
+//	}
+//
+//	FbxNode* Node = GetNodeFromName(NodeName, Scene->GetRootNode());
+//	if (Node)
+//	{
+//		DefaultTransform = TransformData[Node->GetUniqueID()];
+//		DefaultTransform.SetLocation(DefaultTransform.GetLocation() * UniformScale);
+//		DefaultTransform.SetScale3D(DefaultTransform.GetScale3D() * UniformScale);
+//	}
 }
 
 #undef LOCTEXT_NAMESPACE

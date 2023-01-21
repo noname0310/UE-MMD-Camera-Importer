@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "MMDUserImportVMDSettings.h"
 #include "MovieSceneSequence.h"
 
 // TODO: little endian check
@@ -125,21 +126,30 @@ public:
 		const FVmdParseResult& InVmdParseResult,
         UMovieSceneSequence* InSequence,
 		ISequencer& InSequencer,
-		const bool bCreateCameras
+        const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
-
-	static void ImportVmdCameraToExisting(
-        const FVmdParseResult& InVmdParseResult,
-        UMovieSceneSequence* InSequence,
-        IMovieScenePlayer* Player,
-        FMovieSceneSequenceIDRef TemplateID,
-		const FGuid MmdCameraGuid,
-		const FGuid MmdCameraCenterGuid
-    );
 
 private:
 	static FArchive* OpenFile(FString FilePath);
-	static float ComputeFocalLength(const float FieldOfView, const float SensorWidth);
+	
+	static void ImportVmdCameraToExisting(
+		const FVmdParseResult& InVmdParseResult,
+		UMovieSceneSequence* InSequence,
+		IMovieScenePlayer* Player,
+		FMovieSceneSequenceIDRef TemplateID,
+		const FGuid MmdCameraGuid,
+		const FGuid MmdCameraCenterGuid,
+		const UMmdUserImportVmdSettings* ImportVmdSettings
+	);
+
+	static bool ImportVmdCameraTransform(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+		const FGuid ObjectBinding,
+		const UMovieSceneSequence* InSequence,
+		const UMmdUserImportVmdSettings* ImportVmdSettings
+	);
+
+    static float ComputeFocalLength(const float FieldOfView, const float SensorWidth);
 
     static FGuid GetHandleToObject(
 		UObject* InObject,
@@ -147,6 +157,15 @@ private:
 		IMovieScenePlayer* Player,
 		FMovieSceneSequenceIDRef TemplateID,
 		bool bCreateIfMissing
+	);
+
+	static void GetConvertedCameraTransformCurveData(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+		FRichCurve& OutTranslationX, FRichCurve& OutTranslationY, FRichCurve& OutTranslationZ,
+		FRichCurve& OutEulerRotationX, FRichCurve& OutEulerRotationY, FRichCurve& OutEulerRotationZ,
+		FRichCurve& OutScaleX, FRichCurve& OutScaleY, FRichCurve& OutScaleZ,
+		FTransform& OutDefaultTransform,
+		float UniformScale
 	);
 
 private:

@@ -115,7 +115,7 @@ private:
 			ParseResult,
 			Sequence,
 			*Sequencer,
-			ImportVmdSettings->bCreateCameras);
+			ImportVmdSettings);
 
 		Sequencer->NotifyMovieSceneDataChanged(EMovieSceneDataChangeType::MovieSceneStructureItemAdded);
 

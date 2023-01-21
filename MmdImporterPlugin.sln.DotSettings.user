@@ -1,4 +1,6 @@
 ﻿<wpf:ResourceDictionary xml:space="preserve" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:s="clr-namespace:System;assembly=mscorlib" xmlns:ss="urn:shemas-jetbrains-com:settings-storage-xaml" xmlns:wpf="http://schemas.microsoft.com/winfx/2006/xaml/presentation">
+	<s:String x:Key="/Default/CodeInspection/ExcludedFiles/FilesAndFoldersToSkip2/=EAF66356_002D8954_002D3905_002DADB7_002DBE18B683C88B_002Fdl_003ASource_003AC_0021_003FProgram_0020Files_003FEpic_0020Games_003FUE_005F5_002E0_003FEngine_003FSource_002Fd_003AEditor_002Fd_003AUnrealEd_002Fd_003APrivate_002Fd_003AFbx_002Ff_003AFbxCurveDataImport_002Ecpp/@EntryIndexedValue">ExplicitlyExcluded</s:String>
+	<s:Boolean x:Key="/Default/UserDictionary/Words/=Bezier/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=Cinematics/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=endian/@EntryIndexedValue">True</s:Boolean>
 	<s:Boolean x:Key="/Default/UserDictionary/Words/=fbxsdk/@EntryIndexedValue">True</s:Boolean>

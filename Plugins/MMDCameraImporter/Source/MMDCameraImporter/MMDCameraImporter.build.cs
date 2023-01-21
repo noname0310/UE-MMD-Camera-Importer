@@ -9,8 +9,6 @@ public class MMDCameraImporter : ModuleRules
     {
         PCHUsage = ModuleRules.PCHUsageMode.UseExplicitOrSharedPCHs;
         
-        var engineSourceDirectory = Path.GetFullPath(Target.RelativeEnginePath);
-        
         PublicIncludePaths.AddRange(
             new string[]
             {
@@ -22,11 +20,9 @@ public class MMDCameraImporter : ModuleRules
         PrivateIncludePaths.AddRange(
             new string[]
             {
-                Path.Combine(engineSourceDirectory, "Source/Editor/Sequencer/Private"),
                 // ... add other private include paths required here ...
             }
         );
-
 
         PublicDependencyModuleNames.AddRange(
             new string[]
@@ -36,7 +32,6 @@ public class MMDCameraImporter : ModuleRules
                 // ... add other public dependencies that you statically link with here ...
             }
         );
-
 
         PrivateDependencyModuleNames.AddRange(
             new string[]
@@ -55,6 +50,7 @@ public class MMDCameraImporter : ModuleRules
                 "LevelSequenceEditor",
                 "DesktopPlatform",
                 "CinematicCamera",
+                "MovieSceneTracks",
                 // ... add private dependencies that you statically link with here ...	
             }
         );

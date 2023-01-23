@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "CineCameraComponent.h"
 #include "MMDUserImportVMDSettings.h"
 #include "MovieSceneSequence.h"
 
@@ -124,9 +125,9 @@ public:
 
 	static void ImportVmdCamera(
 		const FVmdParseResult& InVmdParseResult,
-        UMovieSceneSequence* InSequence,
+		UMovieSceneSequence* InSequence,
 		ISequencer& InSequencer,
-        const UMmdUserImportVmdSettings* ImportVmdSettings
+		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
 private:
@@ -142,6 +143,14 @@ private:
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
+	static bool ImportVmdCameraProperty(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+		const FGuid ObjectBinding,
+		const UMovieSceneSequence* InSequence,
+		const UCineCameraComponent* InCineCameraComponent,
+		const UMmdUserImportVmdSettings* ImportVmdSettings
+	);
+
 	static bool ImportVmdCameraTransform(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
 		const FGuid ObjectBinding,
@@ -149,23 +158,21 @@ private:
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
-    static float ComputeFocalLength(const float FieldOfView, const float SensorWidth);
+	static bool ImportVmdCameraCenterTransform(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+		const FGuid ObjectBinding,
+		const UMovieSceneSequence* InSequence,
+		const UMmdUserImportVmdSettings* ImportVmdSettings
+	);
 
-    static FGuid GetHandleToObject(
+	static float ComputeFocalLength(const float FieldOfView, const float SensorWidth);
+
+	static FGuid GetHandleToObject(
 		UObject* InObject,
 		UMovieSceneSequence* InSequence,
 		IMovieScenePlayer* Player,
 		FMovieSceneSequenceIDRef TemplateID,
 		bool bCreateIfMissing
-	);
-
-	static void GetConvertedCameraTransformCurveData(
-		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-		FRichCurve& OutTranslationX, FRichCurve& OutTranslationY, FRichCurve& OutTranslationZ,
-		FRichCurve& OutEulerRotationX, FRichCurve& OutEulerRotationY, FRichCurve& OutEulerRotationZ,
-		FRichCurve& OutScaleX, FRichCurve& OutScaleY, FRichCurve& OutScaleZ,
-		FTransform& OutDefaultTransform,
-		float UniformScale
 	);
 
 private:

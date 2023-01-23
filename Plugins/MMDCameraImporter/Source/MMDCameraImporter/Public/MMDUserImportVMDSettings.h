@@ -11,8 +11,8 @@ UENUM()
 enum class ECameraCutImportType
 {
 	OneFrameInterval UMETA(DisplayName = "One Frame Interval (Best for Sequencer)"),
-	ConstantKey UMETA(DisplayName = "Constant Key (MMD 60 frame animtion method)"),
-	ImportAsIs UMETA(DisplayName = "Import As Is (For 30 frame animtion)"),
+	ConstantKey UMETA(DisplayName = "Constant Key (MMD 60 frame animation method)"),
+	ImportAsIs UMETA(DisplayName = "Import As Is (For 30 frame animation)"),
 };
 
 UCLASS(config = EditorSettings, BlueprintType)

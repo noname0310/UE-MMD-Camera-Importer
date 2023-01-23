@@ -419,7 +419,7 @@ void FVmdImporter::ImportVmdCameraToExisting(
 
 			if (ImportVmdSettings->bAddMotionBlurKey)
 			{
-			    CreateVmdCameraMotionBlurProperty(
+				CreateVmdCameraMotionBlurProperty(
 					InVmdParseResult.CameraKeyFrames,
 					PropertyOwnerGuid,
 					InSequence,
@@ -501,9 +501,9 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 	const TArray<TPair<uint32, uint32>> ReducedKeys = ReduceKeys<uint32>(
 		[&CameraKeyFrames](const PTRINT Index)
 		{
-            // ReSharper disable once CppUseStructuredBinding
-            const FVmdObject::FCameraKeyFrame& CameraKeyFrame = CameraKeyFrames[Index];
-	        return TPair<uint32, uint32>(CameraKeyFrame.FrameNumber, CameraKeyFrame.ViewAngle);
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame& CameraKeyFrame = CameraKeyFrames[Index];
+			return TPair<uint32, uint32>(CameraKeyFrame.FrameNumber, CameraKeyFrame.ViewAngle);
 		},
 		CameraKeyFrames.Num());
 	
@@ -513,8 +513,8 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 		const TPair<uint32, uint32>& CurrentKeyFrame = ReducedKeys[i];
 		const float CurrentFocalLength = ComputeFocalLength(CurrentKeyFrame.Value, SensorWidth);
 		
-        // ReSharper disable once CppTooWideScopeInitStatement
-        const TPair<uint32, uint32>* NextKeyFrame = (i + 1) < ReducedKeys.Num()
+		// ReSharper disable once CppTooWideScopeInitStatement
+		const TPair<uint32, uint32>* NextKeyFrame = (i + 1) < ReducedKeys.Num()
 			? &ReducedKeys[i + 1]
 			: nullptr;
 
@@ -522,7 +522,7 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 		{
 			if (CameraCutImportType == ECameraCutImportType::ConstantKey)
 			{
-			    Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentFocalLength);
+				Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentFocalLength);
 			}
 			else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
 			{

@@ -197,8 +197,8 @@ private:
 		for (PTRINT i = 0; i < Num - 1; ++i)
 		{
 			const TPair<uint32, T> Current = InGetKeyFunc(i);
-            // ReSharper disable once CppTooWideScopeInitStatement
-            const TPair<uint32, T> Next = InGetKeyFunc(i + 1);
+			// ReSharper disable once CppTooWideScopeInitStatement
+			const TPair<uint32, T> Next = InGetKeyFunc(i + 1);
 
 			if (
 				LastValue == Current.Value &&

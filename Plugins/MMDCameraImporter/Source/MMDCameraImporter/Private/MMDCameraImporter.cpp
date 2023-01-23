@@ -99,19 +99,19 @@ private:
 
 		if (!VmdImporter.IsValidVmdFile())
 		{
-		    return FReply::Unhandled();
+			return FReply::Unhandled();
 		}
 
 		const FScopedTransaction Transaction(LOCTEXT("ImportVMDTransaction", "Import VMD"));
 		
-        const FVmdParseResult ParseResult = VmdImporter.ParseVmdFile();
+		const FVmdParseResult ParseResult = VmdImporter.ParseVmdFile();
 
-        if (!ParseResult.bIsSuccess)
-        {
+		if (!ParseResult.bIsSuccess)
+		{
 			return FReply::Unhandled();
-        }
+		}
 
-        FVmdImporter::ImportVmdCamera(
+		FVmdImporter::ImportVmdCamera(
 			ParseResult,
 			Sequence,
 			*Sequencer,
@@ -119,7 +119,7 @@ private:
 
 		Sequencer->NotifyMovieSceneDataChanged(EMovieSceneDataChangeType::MovieSceneStructureItemAdded);
 
-        if (const TSharedPtr<SWindow> Window = FSlateApplication::Get().FindWidgetWindow(AsShared()); Window.IsValid())
+		if (const TSharedPtr<SWindow> Window = FSlateApplication::Get().FindWidgetWindow(AsShared()); Window.IsValid())
 		{
 			Window->RequestDestroyWindow();
 		}

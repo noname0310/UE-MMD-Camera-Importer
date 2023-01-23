@@ -292,8 +292,6 @@ void FVmdImporter::ImportVmdCamera(
 
 	FGuid MmdCameraGuid;
 	FGuid MmdCameraCenterGuid;
-
-	if (ImportVmdSettings->bCreateCameras)
 	{
 		UWorld* World = GCurrentLevelEditingViewportClient ? GCurrentLevelEditingViewportClient->GetWorld() : nullptr;
 		check(World != nullptr && "World is null");
@@ -316,8 +314,9 @@ void FVmdImporter::ImportVmdCamera(
 		{
 			// ReSharper disable once CppUseStructuredBinding
 			const FVmdObject::FCameraKeyFrame FirstFrame = InVmdParseResult.CameraKeyFrames[0];
+			const float UniformScale = ImportVmdSettings->ImportUniformScale;
 			
-			NewCamera->SetActorRelativeLocation(FVector(FirstFrame.Distance, 0, 0));
+			NewCamera->SetActorRelativeLocation(FVector(FirstFrame.Distance * UniformScale, 0, 0));
 
 			// Position:
 			// X -> Y
@@ -325,9 +324,9 @@ void FVmdImporter::ImportVmdCamera(
 			// Z -> X
 			NewCameraCenter->SetActorRelativeLocation(
 				FVector(
-					FirstFrame.Position[2],
-					FirstFrame.Position[0],
-					FirstFrame.Position[1]));
+					FirstFrame.Position[2] * UniformScale,
+					FirstFrame.Position[0] * UniformScale,
+					FirstFrame.Position[1] * UniformScale));
 
 			// Rotation:
 			// X -> Y
@@ -605,7 +604,7 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 			{
 				CameraCutRanges.Push(TRange<uint32>(RangeStart, PreviousFrameNumber));
 			}
-		    RangeStart = CurrentFrameNumber;
+			RangeStart = CurrentFrameNumber;
 		}
 	}
 
@@ -623,7 +622,7 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 		{
 			Channel->AddConstantKey(static_cast<int32>(LowerBound) * FrameRatio, 0.0f);
 		}
-	    else
+		else
 		{
 			Channel->AddConstantKey((static_cast<int32>(LowerBound + 1) * FrameRatio) - OneSampleFrame, 0.0f);
 		}
@@ -642,18 +641,13 @@ bool FVmdImporter::ImportVmdCameraTransform(
 {
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
 
-	// Look for transforms explicitly
-	FRichCurve Translation[3];
-	FRichCurve EulerRotation[3];
-	FRichCurve Scale[3];
-	FTransform DefaultTransform;
-
 	UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
 	if (!TransformTrack)
 	{
 		MovieScene->Modify();
 		TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectBinding);
 	}
+
 	TransformTrack->Modify();
 
 	bool bSectionAdded = false;
@@ -672,23 +666,9 @@ bool FVmdImporter::ImportVmdCameraTransform(
 
 	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
 
-	const FVector Location = DefaultTransform.GetLocation();
-	const FVector Rotation = DefaultTransform.GetRotation().Euler();
-	const FVector Scale3D = DefaultTransform.GetScale3D();
+	FMovieSceneDoubleChannel* LocationXChannel = TransformSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
 
-	const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
-
-	Channels[0]->SetDefault(Location.X);
-	Channels[1]->SetDefault(Location.Y);
-	Channels[2]->SetDefault(Location.Z);
-
-	Channels[3]->SetDefault(Rotation.X);
-	Channels[4]->SetDefault(Rotation.Y);
-	Channels[5]->SetDefault(Rotation.Z);
-
-	Channels[6]->SetDefault(Scale3D.X);
-	Channels[7]->SetDefault(Scale3D.Y);
-	Channels[8]->SetDefault(Scale3D.Z);
+	LocationXChannel->SetDefault(0);
 
 	return true;
 }

@@ -476,34 +476,53 @@ bool FVmdImporter::ImportVmdCameraProperty(
 	const FVmdObject::FCameraKeyFrame FirstFrame = CameraKeyFrames[0];
 
 	FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
+	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
 	const FFrameRate FrameRate = FloatSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
-	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30);
+	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
+	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
 	const float SensorWidth = InCineCameraComponent->Filmback.SensorWidth;
+	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
 
 	{
 		const float TrackDefaultValue = ComputeFocalLength(FirstFrame.ViewAngle, SensorWidth);
 		Channel->SetDefault(TrackDefaultValue);
 	}
 
-	uint32 LastViewAngle = 0;
-
-	for (PTRINT i = 0; i < CameraKeyFrames.Num(); ++i)
+	const TArray<TPair<uint32, uint32>> ReducedKeys = ReduceKeys<uint32>(
+		[&CameraKeyFrames](const PTRINT Index)
+		{
+            // ReSharper disable once CppUseStructuredBinding
+            const FVmdObject::FCameraKeyFrame& CameraKeyFrame = CameraKeyFrames[Index];
+	        return TPair<uint32, uint32>(CameraKeyFrame.FrameNumber, CameraKeyFrame.ViewAngle);
+		},
+		CameraKeyFrames.Num());
+	
+	for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
 	{
 		// ReSharper disable once CppUseStructuredBinding
-		const FVmdObject::FCameraKeyFrame& CameraKeyFrame = CameraKeyFrames[i];
+		const TPair<uint32, uint32>& CurrentKeyFrame = ReducedKeys[i];
+		
+        // ReSharper disable once CppTooWideScopeInitStatement
+        const TPair<uint32, uint32>* NextKeyFrame = (i + 1) < ReducedKeys.Num()
+			? &ReducedKeys[i + 1]
+			: nullptr;
 
-		// ReSharper disable once CppTooWideScopeInitStatement
-		const uint32 NextViewAngle = (i + 1) < CameraKeyFrames.Num()
-			? CameraKeyFrames[i + 1].ViewAngle
-			: 0;
-
-		if (LastViewAngle == CameraKeyFrame.ViewAngle && CameraKeyFrame.ViewAngle == NextViewAngle)
+		if (CameraCutImportType != ECameraCutImportType::ImportAsIs && NextKeyFrame != nullptr && NextKeyFrame->Key - CurrentKeyFrame.Key <= 1)
 		{
-			continue;
+			if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+			{
+			    Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, ComputeFocalLength(CurrentKeyFrame.Value, SensorWidth));
+			}
+			else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+			{
+				const auto a = (static_cast<int32>(NextKeyFrame->Key) * FrameRatio) - 1;
+				Channel->AddLinearKey((static_cast<int32>(NextKeyFrame->Key) * FrameRatio) - OneSampleFrame, ComputeFocalLength(CurrentKeyFrame.Value, SensorWidth));
+			}
 		}
-
-		Channel->AddLinearKey(static_cast<int32>(CameraKeyFrame.FrameNumber)* FrameRatio, ComputeFocalLength(CameraKeyFrame.ViewAngle, SensorWidth));
-		LastViewAngle = CameraKeyFrame.ViewAngle;
+		else
+		{
+			Channel->AddLinearKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, ComputeFocalLength(CurrentKeyFrame.Value, SensorWidth));
+		}
 	}
 	
 	return true;

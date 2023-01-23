@@ -175,6 +175,39 @@ private:
 		bool bCreateIfMissing
 	);
 
+	// T must be number
+	template<typename T>
+	static TArray<TPair<uint32, T>> ReduceKeys(
+		const TFunction<TPair<uint32, T>(PTRINT)>& InGetKeyFunc,
+		const PTRINT Num
+	)
+	{
+		TArray<TPair<uint32, T>> Result;
+
+		T LastValue = 0;
+
+		for (PTRINT i = 0; i < Num - 1; ++i)
+		{
+			const TPair<uint32, T> Current = InGetKeyFunc(i);
+            // ReSharper disable once CppTooWideScopeInitStatement
+            const TPair<uint32, T> Next = InGetKeyFunc(i + 1);
+
+			if (
+				LastValue == Current.Value &&
+				Current.Value == Next.Value
+			)
+			{
+				continue;
+			}
+
+			Result.Push(Current);
+
+			LastValue = Current.Value;
+		}
+
+		return Result;
+	}
+
 private:
 	FString FilePath;
 	TUniquePtr<FArchive> FileReader;

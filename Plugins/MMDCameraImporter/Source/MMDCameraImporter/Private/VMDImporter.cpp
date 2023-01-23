@@ -340,6 +340,9 @@ void FVmdImporter::ImportVmdCamera(
 
 			UCineCameraComponent* CineCameraComponent = NewCamera->GetCineCameraComponent();
 
+			CineCameraComponent->Filmback.SensorWidth = ImportVmdSettings->CameraFilmback.SensorWidth;
+			CineCameraComponent->Filmback.SensorHeight = ImportVmdSettings->CameraFilmback.SensorHeight;
+
 			CineCameraComponent->CurrentFocalLength =
 				ComputeFocalLength(FirstFrame.ViewAngle, CineCameraComponent->Filmback.SensorWidth);
 		}
@@ -664,11 +667,20 @@ bool FVmdImporter::ImportVmdCameraTransform(
 		TransformSection->SetRange(TRange<FFrameNumber>::All());
 	}
 
+	if (CameraKeyFrames.Num() == 0)
+	{
+		return true;
+	}
+
 	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
 
 	FMovieSceneDoubleChannel* LocationXChannel = TransformSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
 
-	LocationXChannel->SetDefault(0);
+	// ReSharper disable once CppUseStructuredBinding
+	const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
+	const float UniformScale = ImportVmdSettings->ImportUniformScale;
+
+	LocationXChannel->SetDefault(FirstCameraKeyFrame.Distance * UniformScale);
 
 	return true;
 }
@@ -681,12 +693,6 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 )
 {
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
-
-	// Look for transforms explicitly
-	FRichCurve Translation[3];
-	FRichCurve EulerRotation[3];
-	FRichCurve Scale[3];
-	FTransform DefaultTransform;
 
 	UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
 	if (!TransformTrack)
@@ -710,25 +716,26 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 		TransformSection->SetRange(TRange<FFrameNumber>::All());
 	}
 
-	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	if (CameraKeyFrames.Num() == 0)
+	{
+		return true;
+	}
 
-	const FVector Location = DefaultTransform.GetLocation();
-	const FVector Rotation = DefaultTransform.GetRotation().Euler();
-	const FVector Scale3D = DefaultTransform.GetScale3D();
+	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
 
 	const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
 
-	Channels[0]->SetDefault(Location.X);
-	Channels[1]->SetDefault(Location.Y);
-	Channels[2]->SetDefault(Location.Z);
+	// ReSharper disable once CppUseStructuredBinding
+	const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
+	const float UniformScale = ImportVmdSettings->ImportUniformScale;
 
-	Channels[3]->SetDefault(Rotation.X);
-	Channels[4]->SetDefault(Rotation.Y);
-	Channels[5]->SetDefault(Rotation.Z);
+	Channels[0]->SetDefault(FirstCameraKeyFrame.Position[2] * UniformScale);
+	Channels[1]->SetDefault(FirstCameraKeyFrame.Position[0] * UniformScale);
+	Channels[2]->SetDefault(FirstCameraKeyFrame.Position[1] * UniformScale);
 
-	Channels[6]->SetDefault(Scale3D.X);
-	Channels[7]->SetDefault(Scale3D.Y);
-	Channels[8]->SetDefault(Scale3D.Z);
+	Channels[3]->SetDefault(FirstCameraKeyFrame.Rotation[2] * UniformScale);
+	Channels[4]->SetDefault(FirstCameraKeyFrame.Rotation[0] * UniformScale);
+	Channels[5]->SetDefault(FirstCameraKeyFrame.Rotation[1] * UniformScale);
 
 	return true;
 }

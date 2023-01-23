@@ -15,6 +15,20 @@ enum class ECameraCutImportType
 	ImportAsIs UMETA(DisplayName = "Import As Is (For 30 frame animation)"),
 };
 
+USTRUCT()
+struct FFilmbackImportSettings
+{
+	GENERATED_BODY()
+
+	/** Horizontal size of filmback or digital sensor, in mm. */
+	UPROPERTY(EditAnywhere, config, meta = (ClampMin = "0.001", ForceUnits = mm))
+	float SensorWidth;
+
+	/** Vertical size of filmback or digital sensor, in mm. */
+	UPROPERTY(EditAnywhere, config, meta = (ClampMin = "0.001", ForceUnits = mm))
+	float SensorHeight;
+};
+
 UCLASS(config = EditorSettings, BlueprintType)
 class UMmdUserImportVmdSettings final : public UObject
 {
@@ -24,18 +38,22 @@ public:
 	GENERATED_BODY()
 
 	/** Import Uniform Scale */
-	UPROPERTY(EditAnywhere, config, Category = Import)
+	UPROPERTY(EditAnywhere, config, Category = Transform, meta = (ClampMin = "0.0"))
 	float ImportUniformScale;
 
 	/** Camera Cut Import Type */
-	UPROPERTY(EditAnywhere, config, Category = Import)
+	UPROPERTY(EditAnywhere, config, Category = KeyFrame)
 	ECameraCutImportType CameraCutImportType;
 
 	/** Add Motion Blur Key */
-	UPROPERTY(EditAnywhere, config, Category = Import)
+	UPROPERTY(EditAnywhere, config, Category = KeyFrame)
 	bool bAddMotionBlurKey;
 
 	/** Motion Blur Amount */
-	UPROPERTY(EditAnywhere, config, Category = Import, meta = (EditCondition = "bAddMotionBlurKey"))
+	UPROPERTY(EditAnywhere, config, Category = KeyFrame, meta = (ClampMin = "0.0", ClampMax = "1.0", EditCondition = "bAddMotionBlurKey"))
 	float MotionBlurAmount;
+
+	/** Filmback */
+	UPROPERTY(EditAnywhere, config, Category = Camera, meta = (ShowOnlyInnerProperties))
+	FFilmbackImportSettings CameraFilmback;
 };

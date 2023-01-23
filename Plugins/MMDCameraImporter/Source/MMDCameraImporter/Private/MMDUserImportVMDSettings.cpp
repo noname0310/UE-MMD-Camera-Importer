@@ -10,4 +10,6 @@ UMmdUserImportVmdSettings::UMmdUserImportVmdSettings(const FObjectInitializer& I
 	CameraCutImportType = ECameraCutImportType::OneFrameInterval;
 	bAddMotionBlurKey = true;
 	MotionBlurAmount = 0.5f;
+	CameraFilmback.SensorWidth = 24.0f;
+	CameraFilmback.SensorHeight = 13.5f;
 }

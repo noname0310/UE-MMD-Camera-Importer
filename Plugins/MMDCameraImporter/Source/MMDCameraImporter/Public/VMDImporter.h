@@ -143,7 +143,15 @@ private:
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
-	static bool ImportVmdCameraProperty(
+	static bool ImportVmdCameraFocalLengthProperty(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+		const FGuid ObjectBinding,
+		const UMovieSceneSequence* InSequence,
+		const UCineCameraComponent* InCineCameraComponent,
+		const UMmdUserImportVmdSettings* ImportVmdSettings
+	);
+
+	static bool CreateVmdCameraMotionBlurProperty(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
 		const FGuid ObjectBinding,
 		const UMovieSceneSequence* InSequence,

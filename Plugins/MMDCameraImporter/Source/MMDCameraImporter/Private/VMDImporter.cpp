@@ -410,12 +410,22 @@ void FVmdImporter::ImportVmdCameraToExisting(
 				Spawnable->CopyObjectTemplate(*FoundObject, *InSequence);
 			}
 
-			ImportVmdCameraProperty(
+			ImportVmdCameraFocalLengthProperty(
 				InVmdParseResult.CameraKeyFrames,
 				PropertyOwnerGuid,
 				InSequence,
 				CameraComponent,
 				ImportVmdSettings);
+
+			if (ImportVmdSettings->bAddMotionBlurKey)
+			{
+			    CreateVmdCameraMotionBlurProperty(
+					InVmdParseResult.CameraKeyFrames,
+					PropertyOwnerGuid,
+					InSequence,
+					CameraComponent,
+					ImportVmdSettings);
+			}
 		}
 	}
 
@@ -432,7 +442,7 @@ void FVmdImporter::ImportVmdCameraToExisting(
 		ImportVmdSettings);
 }
 
-bool FVmdImporter::ImportVmdCameraProperty(
+bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
 	const FGuid ObjectBinding,
 	const UMovieSceneSequence* InSequence,
@@ -525,6 +535,103 @@ bool FVmdImporter::ImportVmdCameraProperty(
 		}
 	}
 	
+	return true;
+}
+
+bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
+	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+	const FGuid ObjectBinding,
+	const UMovieSceneSequence* InSequence,
+	const UCineCameraComponent* InCineCameraComponent,
+	const UMmdUserImportVmdSettings* ImportVmdSettings
+)
+{
+	UMovieScene* MovieScene = InSequence->GetMovieScene();
+
+	const FName TrackName = TEXT("PostProcessSettings.MotionBlurAmount");
+	
+	UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(ObjectBinding, TrackName);
+	if (FloatTrack == nullptr)
+	{
+		FloatTrack = MovieScene->AddTrack<UMovieSceneFloatTrack>(ObjectBinding);
+		FloatTrack->SetPropertyNameAndPath("MotionBlurAmount", "PostProcessSettings.MotionBlurAmount");
+	}
+
+	FloatTrack->Modify();
+	FloatTrack->RemoveAllAnimationData();
+
+	bool bSectionAdded = false;
+	UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(FloatTrack->FindOrAddSection(0, bSectionAdded));
+	if (!FloatSection)
+	{
+		return false;
+	}
+
+	FloatSection->Modify();
+
+	if (bSectionAdded)
+	{
+		FloatSection->SetRange(TRange<FFrameNumber>::All());
+	}
+
+	if (CameraKeyFrames.Num() == 0)
+	{
+		return true;
+	}
+
+	// ReSharper disable once CppUseStructuredBinding
+	const FVmdObject::FCameraKeyFrame FirstFrame = CameraKeyFrames[0];
+
+	FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
+	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
+	const FFrameRate FrameRate = FloatSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
+	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
+	const float SensorWidth = InCineCameraComponent->Filmback.SensorWidth;
+	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
+
+	{
+		const float TrackDefaultValue = ComputeFocalLength(FirstFrame.ViewAngle, SensorWidth);
+		Channel->SetDefault(TrackDefaultValue);
+	}
+
+	const TArray<TPair<uint32, uint32>> ReducedKeys = ReduceKeys<uint32>(
+		[&CameraKeyFrames](const PTRINT Index)
+		{
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame& CameraKeyFrame = CameraKeyFrames[Index];
+	return TPair<uint32, uint32>(CameraKeyFrame.FrameNumber, CameraKeyFrame.ViewAngle);
+		},
+		CameraKeyFrames.Num());
+
+	for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
+	{
+		// ReSharper disable once CppUseStructuredBinding
+		const TPair<uint32, uint32>& CurrentKeyFrame = ReducedKeys[i];
+		const float CurrentFocalLength = ComputeFocalLength(CurrentKeyFrame.Value, SensorWidth);
+
+		// ReSharper disable once CppTooWideScopeInitStatement
+		const TPair<uint32, uint32>* NextKeyFrame = (i + 1) < ReducedKeys.Num()
+			? &ReducedKeys[i + 1]
+			: nullptr;
+
+		if (CameraCutImportType != ECameraCutImportType::ImportAsIs && NextKeyFrame != nullptr && NextKeyFrame->Key - CurrentKeyFrame.Key <= 1)
+		{
+			if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+			{
+				Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentFocalLength);
+			}
+			else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+			{
+				Channel->AddLinearKey((static_cast<int32>(NextKeyFrame->Key) * FrameRatio) - OneSampleFrame, CurrentFocalLength);
+			}
+		}
+		else
+		{
+			Channel->AddLinearKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentFocalLength);
+		}
+	}
+
 	return true;
 }
 

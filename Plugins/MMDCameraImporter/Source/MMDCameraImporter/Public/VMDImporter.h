@@ -155,7 +155,6 @@ private:
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
 		const FGuid ObjectBinding,
 		const UMovieSceneSequence* InSequence,
-		const UCineCameraComponent* InCineCameraComponent,
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 

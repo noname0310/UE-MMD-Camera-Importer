@@ -23,16 +23,8 @@ public:
 
 	GENERATED_BODY()
 
-	/** Whether to create cameras if they don't already exist in the level. */
-	UPROPERTY(EditAnywhere, config, Category = Import)
-	bool bCreateCameras;
-
-	/** Whether to replace the existing transform track or create a new track/section */
-	UPROPERTY(EditAnywhere, config, Category = Import)
-	bool bReplaceTransformTrack;
-
 	/** Import Uniform Scale */
-	UPROPERTY(EditAnywhere, config, Category = Import, meta = (ToolTip = "Import Uniform Scale"))
+	UPROPERTY(EditAnywhere, config, Category = Import)
 	float ImportUniformScale;
 
 	/** Camera Cut Import Type */

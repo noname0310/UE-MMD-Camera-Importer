@@ -334,9 +334,9 @@ void FVmdImporter::ImportVmdCamera(
 			// Z -> X
 			NewCameraCenter->SetActorRelativeRotation(
 				FRotator(
-					FirstFrame.Rotation[2],
-					FirstFrame.Rotation[0],
-					FirstFrame.Rotation[1]));
+					FMath::RadiansToDegrees(FirstFrame.Rotation[2]),
+					FMath::RadiansToDegrees(FirstFrame.Rotation[0]),
+					-FMath::RadiansToDegrees(FirstFrame.Rotation[1])));
 
 			UCineCameraComponent* CineCameraComponent = NewCamera->GetCineCameraComponent();
 
@@ -344,7 +344,7 @@ void FVmdImporter::ImportVmdCamera(
 			CineCameraComponent->Filmback.SensorHeight = ImportVmdSettings->CameraFilmback.SensorHeight;
 
 			CineCameraComponent->CurrentFocalLength =
-				ComputeFocalLength(FirstFrame.ViewAngle, CineCameraComponent->Filmback.SensorWidth);
+				ComputeFocalLength(FirstFrame.ViewAngle, CineCameraComponent->Filmback.SensorWidth) / 2;
 
 			CineCameraComponent->FocusSettings.FocusMethod = ECameraFocusMethod::Disable;
 		}
@@ -505,7 +505,7 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 		},
 		[SensorWidth](const float Value)
 		{
-			return ComputeFocalLength(Value, SensorWidth);
+			return ComputeFocalLength(Value, SensorWidth) / 2;
 		});
 	
 	return true;
@@ -851,7 +851,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			},
 			[UniformScale](const double Value)
 			{
-				return FMath::RadiansToDegrees(Value);
+				return -FMath::RadiansToDegrees(Value);
 			});
 	}
 

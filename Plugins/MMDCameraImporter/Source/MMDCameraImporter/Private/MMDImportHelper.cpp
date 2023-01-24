@@ -39,12 +39,3 @@ FString FMmdImportHelper::ShiftJisToFString(const uint8* InBuffer, const int32 I
 	Output.Shrink();
 	return Output;
 }
-
-FVector3f FMmdImportHelper::ConvertVectorFromMmdToUe(const FVector3f InVector)
-{
-	FVector3f Result;
-	Result.X = InVector.X * 1;
-	Result.Y = InVector.Z * -1;
-	Result.Z = InVector.Y * 1;
-	return Result;
-}

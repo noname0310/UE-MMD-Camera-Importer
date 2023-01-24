@@ -655,7 +655,7 @@ bool FVmdImporter::ImportVmdCameraTransform(
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
 	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
 	const float UniformScale = ImportVmdSettings->ImportUniformScale;
-    FTangentAccessIndices TangentAccessIndices;
+	FTangentAccessIndices TangentAccessIndices;
 	{
 		TangentAccessIndices.ArriveTangentX = 17;
 		TangentAccessIndices.ArriveTangentY = 19;

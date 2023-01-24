@@ -196,7 +196,7 @@ private:
 		const FFrameRate SampleRate,
 		const FFrameRate FrameRate,
 		const ECameraCutImportType CameraCutImportType,
-        const FTangentAccessIndices TangentAccessIndices,
+		const FTangentAccessIndices TangentAccessIndices,
 		const TFunction<T(const FVmdObject::FCameraKeyFrame&)> GetValueFunc,
 		const TFunction<T(const T)> MapFunc
 	)

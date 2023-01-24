@@ -519,15 +519,30 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 			? &ReducedKeys[i + 1]
 			: nullptr;
 
-		if (CameraCutImportType != ECameraCutImportType::ImportAsIs && NextKeyFrame != nullptr && NextKeyFrame->Key - CurrentKeyFrame.Key <= 1)
+		if (
+			CameraCutImportType != ECameraCutImportType::ImportAsIs &&
+			NextKeyFrame != nullptr && NextKeyFrame->Key - CurrentKeyFrame.Key <= 1 && NextKeyFrame->Value != CurrentKeyFrame.Value
+		)
 		{
-			if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+			// ReSharper disable once CppTooWideScopeInitStatement
+			const TPair<uint32, uint32>* PreviousKeyFrame = 1 <= i
+				? &ReducedKeys[i - 1]
+				: nullptr;
+
+			if (PreviousKeyFrame != nullptr && CurrentKeyFrame.Key - PreviousKeyFrame->Key <= 1 && CurrentKeyFrame.Value != PreviousKeyFrame->Value)
 			{
 				Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentFocalLength);
 			}
-			else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+			else
 			{
-				Channel->AddLinearKey((static_cast<int32>(NextKeyFrame->Key) * FrameRatio) - OneSampleFrame, CurrentFocalLength);
+				if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+				{
+					Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentFocalLength);
+				}
+				else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+				{
+					Channel->AddLinearKey((static_cast<int32>(NextKeyFrame->Key) * FrameRatio) - OneSampleFrame, CurrentFocalLength);
+				}
 			}
 		}
 		else
@@ -595,19 +610,31 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 
 		for (PTRINT i = 1; i < CameraKeyFrames.Num(); ++i)
 		{
-			const uint32 PreviousFrameNumber = CameraKeyFrames[i - 1].FrameNumber;
-			const uint32 CurrentFrameNumber = CameraKeyFrames[i].FrameNumber;
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame& PreviousFrame = CameraKeyFrames[i - 1];
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame& CurrentFrame = CameraKeyFrames[i];
 
-			if ((CurrentFrameNumber - PreviousFrameNumber) <= 1)
+			if (
+				(CurrentFrame.FrameNumber - PreviousFrame.FrameNumber) <= 1 &&
+
+				CurrentFrame.ViewAngle != PreviousFrame.ViewAngle &&
+				CurrentFrame.Distance != PreviousFrame.Distance &&
+				CurrentFrame.Position[0] != PreviousFrame.Position[0] &&
+				CurrentFrame.Position[1] != PreviousFrame.Position[1] &&
+				CurrentFrame.Position[2] != PreviousFrame.Position[2] &&
+				CurrentFrame.Rotation[0] != PreviousFrame.Rotation[0] &&
+				CurrentFrame.Rotation[1] != PreviousFrame.Rotation[1] &&
+				CurrentFrame.Rotation[2] != PreviousFrame.Rotation[2])
 			{
 				continue;
 			}
 
-			if (PreviousFrameNumber != RangeStart)
+			if (PreviousFrame.FrameNumber != RangeStart)
 			{
-				CameraCutRanges.Push(TRange<uint32>(RangeStart, PreviousFrameNumber));
+				CameraCutRanges.Push(TRange<uint32>(RangeStart, PreviousFrame.FrameNumber));
 			}
-			RangeStart = CurrentFrameNumber;
+			RangeStart = CurrentFrame.FrameNumber;
 		}
 	}
 
@@ -672,15 +699,71 @@ bool FVmdImporter::ImportVmdCameraTransform(
 		return true;
 	}
 
-	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
 
 	FMovieSceneDoubleChannel* LocationXChannel = TransformSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
+	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
+	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
+	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
+	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
 
-	// ReSharper disable once CppUseStructuredBinding
-	const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
 	const float UniformScale = ImportVmdSettings->ImportUniformScale;
 
-	LocationXChannel->SetDefault(FirstCameraKeyFrame.Distance * UniformScale);
+	{
+		// ReSharper disable once CppUseStructuredBinding
+		const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
+		LocationXChannel->SetDefault(FirstCameraKeyFrame.Distance * UniformScale);
+	}
+
+	const TArray<TPair<uint32, float>> ReducedKeys = ReduceKeys<float>(
+		[&CameraKeyFrames](const PTRINT Index)
+		{
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame& CameraKeyFrame = CameraKeyFrames[Index];
+			return TPair<uint32, float>(CameraKeyFrame.FrameNumber, CameraKeyFrame.Distance);
+		},
+		CameraKeyFrames.Num());
+
+	for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
+	{
+		// ReSharper disable once CppUseStructuredBinding
+		const TPair<uint32, float>& CurrentKeyFrame = ReducedKeys[i];
+
+		// ReSharper disable once CppTooWideScopeInitStatement
+		const TPair<uint32, float>* NextKeyFrame = (i + 1) < ReducedKeys.Num()
+			? &ReducedKeys[i + 1]
+			: nullptr;
+		
+		if (CameraCutImportType != ECameraCutImportType::ImportAsIs &&
+			NextKeyFrame != nullptr && NextKeyFrame->Key - CurrentKeyFrame.Key <= 1 && NextKeyFrame->Value != CurrentKeyFrame.Value
+		)
+		{
+			// ReSharper disable once CppTooWideScopeInitStatement
+			const TPair<uint32, float>* PreviousKeyFrame = 1 <= i
+				? &ReducedKeys[i - 1]
+				: nullptr;
+
+			if (PreviousKeyFrame != nullptr && CurrentKeyFrame.Key - PreviousKeyFrame->Key <= 1 && CurrentKeyFrame.Value != PreviousKeyFrame->Value)
+			{
+				LocationXChannel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentKeyFrame.Value * UniformScale);
+			}
+			else
+			{
+				if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+				{
+					LocationXChannel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentKeyFrame.Value * UniformScale);
+				}
+				else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+				{
+					LocationXChannel->AddCubicKey((static_cast<int32>(NextKeyFrame->Key) * FrameRatio) - OneSampleFrame, CurrentKeyFrame.Value * UniformScale);
+				}
+			}
+		}
+		else
+		{
+			LocationXChannel->AddCubicKey(static_cast<int32>(CurrentKeyFrame.Key) * FrameRatio, CurrentKeyFrame.Value * UniformScale);
+		}
+	}
 
 	return true;
 }

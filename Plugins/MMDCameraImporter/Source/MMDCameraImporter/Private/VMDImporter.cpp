@@ -819,7 +819,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			},
 			[UniformScale](const double Value)
 			{
-				return Value;
+				return FMath::RadiansToDegrees(Value);
 			});
 
 		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
@@ -835,7 +835,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			},
 			[UniformScale](const double Value)
 			{
-				return Value;
+				return FMath::RadiansToDegrees(Value);
 			});
 
 		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
@@ -851,7 +851,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			},
 			[UniformScale](const double Value)
 			{
-				return Value;
+				return FMath::RadiansToDegrees(Value);
 			});
 	}
 

@@ -575,14 +575,14 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 			if (
 				(CurrentFrame.FrameNumber - PreviousFrame.FrameNumber) <= 1 &&
 
-				CurrentFrame.ViewAngle != PreviousFrame.ViewAngle &&
-				CurrentFrame.Distance != PreviousFrame.Distance &&
-				CurrentFrame.Position[0] != PreviousFrame.Position[0] &&
-				CurrentFrame.Position[1] != PreviousFrame.Position[1] &&
-				CurrentFrame.Position[2] != PreviousFrame.Position[2] &&
-				CurrentFrame.Rotation[0] != PreviousFrame.Rotation[0] &&
-				CurrentFrame.Rotation[1] != PreviousFrame.Rotation[1] &&
-				CurrentFrame.Rotation[2] != PreviousFrame.Rotation[2])
+				(CurrentFrame.ViewAngle != PreviousFrame.ViewAngle ||
+				CurrentFrame.Distance != PreviousFrame.Distance ||
+				CurrentFrame.Position[0] != PreviousFrame.Position[0] ||
+				CurrentFrame.Position[1] != PreviousFrame.Position[1] ||
+				CurrentFrame.Position[2] != PreviousFrame.Position[2] ||
+				CurrentFrame.Rotation[0] != PreviousFrame.Rotation[0] ||
+				CurrentFrame.Rotation[1] != PreviousFrame.Rotation[1] ||
+				CurrentFrame.Rotation[2] != PreviousFrame.Rotation[2]))
 			{
 				continue;
 			}

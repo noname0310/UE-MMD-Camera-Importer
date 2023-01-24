@@ -184,32 +184,32 @@ private:
 
 	// T must be number
 	template<typename T>
-	static TArray<TPair<uint32, T>> ReduceKeys(
-		const TFunction<TPair<uint32, T>(PTRINT)>& InGetKeyFunc,
-		const PTRINT Num
+	static TArray<FVmdObject::FCameraKeyFrame> ReduceKeys(
+		const TArray<FVmdObject::FCameraKeyFrame>& InCameraKeyFrames,
+		const TFunction<T(const TArray<FVmdObject::FCameraKeyFrame>&, PTRINT)>& InGetKeyFunc
 	)
 	{
-		TArray<TPair<uint32, T>> Result;
+		TArray<FVmdObject::FCameraKeyFrame> Result;
 
 		T LastValue = 0;
 
-		for (PTRINT i = 0; i < Num - 1; ++i)
+		for (PTRINT i = 0; i < InCameraKeyFrames.Num() - 1; ++i)
 		{
-			const TPair<uint32, T> Current = InGetKeyFunc(i);
-			// ReSharper disable once CppTooWideScopeInitStatement
-			const TPair<uint32, T> Next = InGetKeyFunc(i + 1);
+			const T CurrentValue = InGetKeyFunc(InCameraKeyFrames, i);
+			const T NextValue = InGetKeyFunc(InCameraKeyFrames, i + 1);
 
 			if (
-				LastValue == Current.Value &&
-				Current.Value == Next.Value
+				LastValue == CurrentValue &&
+				CurrentValue == NextValue
 			)
 			{
 				continue;
 			}
 
+			const FVmdObject::FCameraKeyFrame& Current = InCameraKeyFrames[i];
 			Result.Push(Current);
 
-			LastValue = Current.Value;
+			LastValue = CurrentValue;
 		}
 
 		return Result;

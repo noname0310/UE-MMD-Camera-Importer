@@ -345,6 +345,8 @@ void FVmdImporter::ImportVmdCamera(
 
 			CineCameraComponent->CurrentFocalLength =
 				ComputeFocalLength(FirstFrame.ViewAngle, CineCameraComponent->Filmback.SensorWidth);
+
+			CineCameraComponent->FocusSettings.FocusMethod = ECameraFocusMethod::Disable;
 		}
 
 		TArray<TWeakObjectPtr<AActor>> NewActors;
@@ -478,76 +480,33 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 		FloatSection->SetRange(TRange<FFrameNumber>::All());
 	}
 
-	if (CameraKeyFrames.Num() == 0)
-	{
-		return true;
-	}
-
-	// ReSharper disable once CppUseStructuredBinding
-	const FVmdObject::FCameraKeyFrame FirstFrame = CameraKeyFrames[0];
-
 	FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
 	const FFrameRate FrameRate = FloatSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
-	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
-	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
 	const float SensorWidth = InCineCameraComponent->Filmback.SensorWidth;
-	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
-
+	FTangentAccessIndices TangentAccessIndices;
 	{
-		const float TrackDefaultValue = ComputeFocalLength(FirstFrame.ViewAngle, SensorWidth);
-		Channel->SetDefault(TrackDefaultValue);
+		TangentAccessIndices.ArriveTangentX = 21;
+		TangentAccessIndices.ArriveTangentY = 23;
+		TangentAccessIndices.LeaveTangentX = 20;
+		TangentAccessIndices.LeaveTangentY = 22;
 	}
 
-	const TArray<FVmdObject::FCameraKeyFrame> ReducedKeys = ReduceKeys<uint32>(
+	ImportCameraSingleChannel<float, FMovieSceneFloatChannel, FMovieSceneFloatValue>(
 		CameraKeyFrames,
-		[](const TArray<FVmdObject::FCameraKeyFrame>& KeyFrames, const PTRINT Index)
+		Channel,
+		SampleRate,
+		FrameRate,
+		ImportVmdSettings->CameraCutImportType,
+		TangentAccessIndices,
+		[](const FVmdObject::FCameraKeyFrame& KeyFrames)
 		{
-			return KeyFrames[Index].ViewAngle;
+			return KeyFrames.ViewAngle;
+		},
+		[SensorWidth](const float Value)
+		{
+			return ComputeFocalLength(Value, SensorWidth);
 		});
-	
-	for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
-	{
-		// ReSharper disable once CppUseStructuredBinding
-		const FVmdObject::FCameraKeyFrame& CurrentKeyFrame = ReducedKeys[i];
-		const float CurrentFocalLength = ComputeFocalLength(CurrentKeyFrame.ViewAngle, SensorWidth);
-		
-		// ReSharper disable once CppTooWideScopeInitStatement
-		const FVmdObject::FCameraKeyFrame* NextKeyFrame = (i + 1) < ReducedKeys.Num()
-			? &ReducedKeys[i + 1]
-			: nullptr;
-
-		if (
-			CameraCutImportType != ECameraCutImportType::ImportAsIs &&
-			NextKeyFrame != nullptr && NextKeyFrame->FrameNumber - CurrentKeyFrame.FrameNumber <= 1 && NextKeyFrame->ViewAngle != CurrentKeyFrame.ViewAngle
-		)
-		{
-			// ReSharper disable once CppTooWideScopeInitStatement
-			const FVmdObject::FCameraKeyFrame* PreviousKeyFrame = 1 <= i
-				? &ReducedKeys[i - 1]
-				: nullptr;
-
-			if (PreviousKeyFrame != nullptr && CurrentKeyFrame.FrameNumber - PreviousKeyFrame->FrameNumber <= 1 && CurrentKeyFrame.ViewAngle != PreviousKeyFrame->ViewAngle)
-			{
-				Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio, CurrentFocalLength);
-			}
-			else
-			{
-				if (CameraCutImportType == ECameraCutImportType::ConstantKey)
-				{
-					Channel->AddConstantKey(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio, CurrentFocalLength);
-				}
-				else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
-				{
-					Channel->AddLinearKey((static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame, CurrentFocalLength);
-				}
-			}
-		}
-		else
-		{
-			Channel->AddLinearKey(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio, CurrentFocalLength);
-		}
-	}
 	
 	return true;
 }
@@ -691,118 +650,34 @@ bool FVmdImporter::ImportVmdCameraTransform(
 	{
 		TransformSection->SetRange(TRange<FFrameNumber>::All());
 	}
-
-	if (CameraKeyFrames.Num() == 0)
-	{
-		return true;
-	}
-
-
+	
 	FMovieSceneDoubleChannel* LocationXChannel = TransformSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
 	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
-	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
-	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
-	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
-
 	const float UniformScale = ImportVmdSettings->ImportUniformScale;
-
+    FTangentAccessIndices TangentAccessIndices;
 	{
-		// ReSharper disable once CppUseStructuredBinding
-		const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
-		LocationXChannel->SetDefault(FirstCameraKeyFrame.Distance * UniformScale);
+		TangentAccessIndices.ArriveTangentX = 17;
+		TangentAccessIndices.ArriveTangentY = 19;
+		TangentAccessIndices.LeaveTangentX = 16;
+		TangentAccessIndices.LeaveTangentY = 18;
 	}
 
-	const TArray<FVmdObject::FCameraKeyFrame> ReducedKeys = ReduceKeys<float>(
+	ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
 		CameraKeyFrames,
-		[](const TArray<FVmdObject::FCameraKeyFrame>& KeyFrames, const PTRINT Index)
+		LocationXChannel,
+		SampleRate,
+		FrameRate,
+		ImportVmdSettings->CameraCutImportType,
+		TangentAccessIndices,
+		[](const FVmdObject::FCameraKeyFrame& KeyFrames)
 		{
-			return KeyFrames[Index].Distance;
+			return KeyFrames.Distance;
+		},
+		[UniformScale](const double Value)
+		{
+			return Value * UniformScale;
 		});
-
-	for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
-	{
-		// ReSharper disable once CppUseStructuredBinding
-		const FVmdObject::FCameraKeyFrame& CurrentKeyFrame = ReducedKeys[i];
-
-		// ReSharper disable once CppTooWideScopeInitStatement
-		const FVmdObject::FCameraKeyFrame* NextKeyFrame = (i + 1) < ReducedKeys.Num()
-			? &ReducedKeys[i + 1]
-			: nullptr;
-		
-		const float Value = CurrentKeyFrame.Distance * UniformScale;
-
-	    FMovieSceneTangentData Tangent;
-		Tangent.TangentWeightMode = RCTWM_WeightedBoth;
-		{
-			const float ArriveTangentX = static_cast<float>(CurrentKeyFrame.Interpolation[17]) / 127.0f;
-			const float ArriveTangentY = static_cast<float>(CurrentKeyFrame.Interpolation[19]) / 127.0f;
-			const float LeaveTangentX = NextKeyFrame != nullptr
-				? static_cast<float>(NextKeyFrame->Interpolation[16]) / 127.0f
-				: 0;
-			const float LeaveTangentY = NextKeyFrame != nullptr
-				? static_cast<float>(NextKeyFrame->Interpolation[18]) / 127.0f
-				: 0;
-		}
-		
-		if (CameraCutImportType != ECameraCutImportType::ImportAsIs &&
-			NextKeyFrame != nullptr && NextKeyFrame->FrameNumber - CurrentKeyFrame.FrameNumber <= 1 && NextKeyFrame->Distance != CurrentKeyFrame.Distance
-		)
-		{
-			// ReSharper disable once CppTooWideScopeInitStatement
-			const FVmdObject::FCameraKeyFrame* PreviousKeyFrame = 1 <= i
-				? &ReducedKeys[i - 1]
-				: nullptr;
-
-			if (PreviousKeyFrame != nullptr && CurrentKeyFrame.FrameNumber - PreviousKeyFrame->FrameNumber <= 1 && CurrentKeyFrame.Distance != PreviousKeyFrame->Distance)
-			{
-				TArray<FFrameNumber> Times;
-				Times.Push(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio);
-
-				TArray<FMovieSceneDoubleValue> MovieSceneDoubleValues;
-				FMovieSceneDoubleValue MovieSceneDoubleValue;
-				{
-					MovieSceneDoubleValue.Value = Value;
-					MovieSceneDoubleValue.InterpMode = RCIM_Constant;
-					MovieSceneDoubleValue.TangentMode = RCTM_Break;
-					MovieSceneDoubleValue.Tangent = Tangent;
-				}
-				MovieSceneDoubleValues.Push(MovieSceneDoubleValue);
-
-				LocationXChannel->AddKeys(Times, MovieSceneDoubleValues);
-			}
-			else
-			{
-				if (CameraCutImportType == ECameraCutImportType::ConstantKey)
-				{
-					TArray<FFrameNumber> Times;
-					Times.Push(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio);
-
-					TArray<FMovieSceneDoubleValue> MovieSceneDoubleValues;
-					FMovieSceneDoubleValue MovieSceneDoubleValue;
-					{
-						MovieSceneDoubleValue.Value = Value;
-						MovieSceneDoubleValue.InterpMode = RCIM_Constant;
-						MovieSceneDoubleValue.TangentMode = RCTM_Break;
-						MovieSceneDoubleValue.Tangent = Tangent;
-					}
-				    MovieSceneDoubleValues.Push(MovieSceneDoubleValue);
-
-				    LocationXChannel->AddKeys(Times, MovieSceneDoubleValues);
-				}
-				else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
-				{
-					const FFrameNumber Time = (static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame;
-					LocationXChannel->AddCubicKey(Time, Value, RCTM_Break, Tangent);
-				}
-			}
-		}
-		else
-		{
-			const FFrameNumber Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
-		    LocationXChannel->AddCubicKey(Time, Value, RCTM_Break, Tangent);
-		}
-	}
 
 	return true;
 }
@@ -838,24 +713,147 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 		TransformSection->SetRange(TRange<FFrameNumber>::All());
 	}
 
-	if (CameraKeyFrames.Num() == 0)
+	const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
+	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
+	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const float UniformScale = ImportVmdSettings->ImportUniformScale;
+	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
+
 	{
-		return true;
+		FTangentAccessIndices LocationXTangentAccessIndices;
+		{
+			LocationXTangentAccessIndices.ArriveTangentX = 1;
+			LocationXTangentAccessIndices.ArriveTangentY = 3;
+			LocationXTangentAccessIndices.LeaveTangentX = 0;
+			LocationXTangentAccessIndices.LeaveTangentY = 2;
+		}
+
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+			CameraKeyFrames,
+			Channels[0], // Location X
+			SampleRate,
+			FrameRate,
+			CameraCutImportType,
+			LocationXTangentAccessIndices,
+			[](const FVmdObject::FCameraKeyFrame& KeyFrames)
+			{
+				return KeyFrames.Position[2];
+			},
+			[UniformScale](const double Value)
+			{
+				return Value * UniformScale;
+			});
 	}
 
-	const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
+	{
+		FTangentAccessIndices LocationYTangentAccessIndices;
+		{
+			LocationYTangentAccessIndices.ArriveTangentX = 5;
+			LocationYTangentAccessIndices.ArriveTangentY = 7;
+			LocationYTangentAccessIndices.LeaveTangentX = 4;
+			LocationYTangentAccessIndices.LeaveTangentY = 6;
+		}
 
-	// ReSharper disable once CppUseStructuredBinding
-	const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
-	const float UniformScale = ImportVmdSettings->ImportUniformScale;
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+			CameraKeyFrames,
+			Channels[1], // Location Y
+			SampleRate,
+			FrameRate,
+			CameraCutImportType,
+			LocationYTangentAccessIndices,
+			[](const FVmdObject::FCameraKeyFrame& KeyFrames)
+			{
+				return KeyFrames.Position[0];
+			},
+			[UniformScale](const double Value)
+			{
+				return Value * UniformScale;
+			});
+	}
 
-	Channels[0]->SetDefault(FirstCameraKeyFrame.Position[2] * UniformScale);
-	Channels[1]->SetDefault(FirstCameraKeyFrame.Position[0] * UniformScale);
-	Channels[2]->SetDefault(FirstCameraKeyFrame.Position[1] * UniformScale);
+	{
+		FTangentAccessIndices LocationZTangentAccessIndices;
+		{
+			LocationZTangentAccessIndices.ArriveTangentX = 9;
+			LocationZTangentAccessIndices.ArriveTangentY = 11;
+			LocationZTangentAccessIndices.LeaveTangentX = 8;
+			LocationZTangentAccessIndices.LeaveTangentY = 10;
+		}
 
-	Channels[3]->SetDefault(FirstCameraKeyFrame.Rotation[2] * UniformScale);
-	Channels[4]->SetDefault(FirstCameraKeyFrame.Rotation[0] * UniformScale);
-	Channels[5]->SetDefault(FirstCameraKeyFrame.Rotation[1] * UniformScale);
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+			CameraKeyFrames,
+			Channels[2], // Location Z
+			SampleRate,
+			FrameRate,
+			CameraCutImportType,
+			LocationZTangentAccessIndices,
+			[](const FVmdObject::FCameraKeyFrame& KeyFrames)
+			{
+				return KeyFrames.Position[1];
+			},
+			[UniformScale](const double Value)
+			{
+				return Value * UniformScale;
+			});
+	}
+
+	{
+		FTangentAccessIndices RotationTangentAccessIndices;
+		{
+			RotationTangentAccessIndices.ArriveTangentX = 13;
+			RotationTangentAccessIndices.ArriveTangentY = 15;
+			RotationTangentAccessIndices.LeaveTangentX = 12;
+			RotationTangentAccessIndices.LeaveTangentY = 14;
+		}
+
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+			CameraKeyFrames,
+			Channels[3], // Rotation X
+			SampleRate,
+			FrameRate,
+			CameraCutImportType,
+			RotationTangentAccessIndices,
+			[](const FVmdObject::FCameraKeyFrame& KeyFrames)
+			{
+				return KeyFrames.Rotation[2];
+			},
+			[UniformScale](const double Value)
+			{
+				return Value * UniformScale;
+			});
+
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+			CameraKeyFrames,
+			Channels[4], // Rotation Y
+			SampleRate,
+			FrameRate,
+			CameraCutImportType,
+			RotationTangentAccessIndices,
+			[](const FVmdObject::FCameraKeyFrame& KeyFrames)
+			{
+				return KeyFrames.Rotation[0];
+			},
+			[UniformScale](const double Value)
+			{
+				return Value * UniformScale;
+			});
+
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+			CameraKeyFrames,
+			Channels[5], // Rotation Z
+			SampleRate,
+			FrameRate,
+			CameraCutImportType,
+			RotationTangentAccessIndices,
+			[](const FVmdObject::FCameraKeyFrame& KeyFrames)
+			{
+				return KeyFrames.Rotation[1];
+			},
+			[UniformScale](const double Value)
+			{
+				return Value * UniformScale;
+			});
+	}
 
 	return true;
 }

@@ -6,6 +6,7 @@
 #include "CineCameraComponent.h"
 #include "MMDUserImportVMDSettings.h"
 #include "MovieSceneSequence.h"
+#include "Channels/MovieSceneDoubleChannel.h"
 
 // TODO: little endian check
 
@@ -118,6 +119,9 @@ struct FVmdParseResult
 
 class FVmdImporter
 {
+private:
+	struct FTangentAccessIndices;
+
 public:
 	void SetFilePath(const FString& InFilePath);
 	bool IsValidVmdFile();
@@ -182,11 +186,134 @@ private:
 		bool bCreateIfMissing
 	);
 
+	// T must be double or float
+	// MovieSceneChannel must be FMovieSceneDoubleChannel or FMovieSceneFloatChannel
+	// MovieSceneValue must be FMovieSceneDoubleValue or FMovieSceneFloatValue
+	template<typename T, typename MovieSceneChannel, typename MovieSceneValue>
+	static void ImportCameraSingleChannel(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
+		MovieSceneChannel* Channel,
+		const FFrameRate SampleRate,
+		const FFrameRate FrameRate,
+		const ECameraCutImportType CameraCutImportType,
+        const FTangentAccessIndices TangentAccessIndices,
+		const TFunction<T(const FVmdObject::FCameraKeyFrame&)> GetValueFunc,
+		const TFunction<T(const T)> MapFunc
+	)
+	{
+		if (CameraKeyFrames.Num() == 0)
+		{
+			return;
+		}
+
+		const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
+		const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
+
+		{
+			const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
+			Channel->SetDefault(MapFunc(GetValueFunc(FirstCameraKeyFrame)));
+		}
+
+		const TArray<FVmdObject::FCameraKeyFrame> ReducedKeys = ReduceKeys<T>(
+			CameraKeyFrames,
+			[&GetValueFunc](const TArray<FVmdObject::FCameraKeyFrame>& KeyFrames, const PTRINT Index)
+			{
+				return GetValueFunc(KeyFrames[Index]);
+			});
+
+		for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
+		{
+			// ReSharper disable once CppUseStructuredBinding
+			const FVmdObject::FCameraKeyFrame& CurrentKeyFrame = ReducedKeys[i];
+
+			// ReSharper disable once CppTooWideScopeInitStatement
+			const FVmdObject::FCameraKeyFrame* NextKeyFrame = (i + 1) < ReducedKeys.Num()
+				? &ReducedKeys[i + 1]
+				: nullptr;
+
+			const T Value = MapFunc(GetValueFunc(CurrentKeyFrame));
+
+			FMovieSceneTangentData Tangent;
+			Tangent.TangentWeightMode = RCTWM_WeightedBoth;
+			{
+				const float ArriveTangentX = static_cast<float>(CurrentKeyFrame.Interpolation[TangentAccessIndices.ArriveTangentX]) / 127.0f;
+				const float ArriveTangentY = static_cast<float>(CurrentKeyFrame.Interpolation[TangentAccessIndices.ArriveTangentY]) / 127.0f;
+				const float LeaveTangentX = NextKeyFrame != nullptr
+					? static_cast<float>(NextKeyFrame->Interpolation[TangentAccessIndices.LeaveTangentX]) / 127.0f
+					: 0.0f;
+				const float LeaveTangentY = NextKeyFrame != nullptr
+					? static_cast<float>(NextKeyFrame->Interpolation[TangentAccessIndices.LeaveTangentY]) / 127.0f
+					: 0.0f;
+
+				FVector2D ArriveTangent(ArriveTangentX, ArriveTangentY);
+				FVector2D LeaveTangent(LeaveTangentX, LeaveTangentY);
+			}
+
+			if (CameraCutImportType != ECameraCutImportType::ImportAsIs &&
+				NextKeyFrame != nullptr && NextKeyFrame->FrameNumber - CurrentKeyFrame.FrameNumber <= 1 && GetValueFunc(*NextKeyFrame) != GetValueFunc(CurrentKeyFrame)
+			)
+			{
+				// ReSharper disable once CppTooWideScopeInitStatement
+				const FVmdObject::FCameraKeyFrame* PreviousKeyFrame = 1 <= i
+					? &ReducedKeys[i - 1]
+					: nullptr;
+
+				if (PreviousKeyFrame != nullptr && CurrentKeyFrame.FrameNumber - PreviousKeyFrame->FrameNumber <= 1 && GetValueFunc(CurrentKeyFrame) != GetValueFunc(*PreviousKeyFrame))
+				{
+					TArray<FFrameNumber> Times;
+					Times.Push(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio);
+
+					TArray<MovieSceneValue> MovieSceneValues;
+					MovieSceneValue MovieSceneValueInstance;
+					{
+						MovieSceneValueInstance.Value = Value;
+						MovieSceneValueInstance.InterpMode = RCIM_Constant;
+						MovieSceneValueInstance.TangentMode = RCTM_Break;
+						MovieSceneValueInstance.Tangent = Tangent;
+					}
+					MovieSceneValues.Push(MovieSceneValueInstance);
+
+					Channel->AddKeys(Times, MovieSceneValues);
+				}
+				else
+				{
+					if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+					{
+						TArray<FFrameNumber> Times;
+						Times.Push(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio);
+
+						TArray<MovieSceneValue> MovieSceneValues;
+						MovieSceneValue MovieSceneValueInstance;
+						{
+							MovieSceneValueInstance.Value = Value;
+							MovieSceneValueInstance.InterpMode = RCIM_Constant;
+							MovieSceneValueInstance.TangentMode = RCTM_Break;
+							MovieSceneValueInstance.Tangent = Tangent;
+						}
+						MovieSceneValues.Push(MovieSceneValueInstance);
+
+						Channel->AddKeys(Times, MovieSceneValues);
+					}
+					else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+					{
+						const FFrameNumber Time = (static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame;
+						Channel->AddCubicKey(Time, Value, RCTM_Break, Tangent);
+					}
+				}
+			}
+			else
+			{
+				const FFrameNumber Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
+				Channel->AddCubicKey(Time, Value, RCTM_Break, Tangent);
+			}
+		}
+	}
+
 	// T must be number
 	template<typename T>
 	static TArray<FVmdObject::FCameraKeyFrame> ReduceKeys(
 		const TArray<FVmdObject::FCameraKeyFrame>& InCameraKeyFrames,
-		const TFunction<T(const TArray<FVmdObject::FCameraKeyFrame>&, PTRINT)>& InGetKeyFunc
+		const TFunction<T(const TArray<FVmdObject::FCameraKeyFrame>&, PTRINT)>& InGetValueFunc
 	)
 	{
 		TArray<FVmdObject::FCameraKeyFrame> Result;
@@ -195,8 +322,8 @@ private:
 
 		for (PTRINT i = 0; i < InCameraKeyFrames.Num() - 1; ++i)
 		{
-			const T CurrentValue = InGetKeyFunc(InCameraKeyFrames, i);
-			const T NextValue = InGetKeyFunc(InCameraKeyFrames, i + 1);
+			const T CurrentValue = InGetValueFunc(InCameraKeyFrames, i);
+			const T NextValue = InGetValueFunc(InCameraKeyFrames, i + 1);
 
 			if (
 				LastValue == CurrentValue &&
@@ -218,4 +345,12 @@ private:
 private:
 	FString FilePath;
 	TUniquePtr<FArchive> FileReader;
+
+	struct FTangentAccessIndices
+	{
+		PTRINT ArriveTangentX;
+		PTRINT ArriveTangentY;
+		PTRINT LeaveTangentX;
+		PTRINT LeaveTangentY;
+	};
 };

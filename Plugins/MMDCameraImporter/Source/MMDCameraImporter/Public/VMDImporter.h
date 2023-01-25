@@ -221,6 +221,8 @@ private:
 				return GetValueFunc(KeyFrames[Index]);
 			});
 
+		TArray<TComputedKey<T>> TimeComputedKeys;
+
 		for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
 		{
 			// ReSharper disable once CppUseStructuredBinding
@@ -233,20 +235,20 @@ private:
 
 			const T Value = MapFunc(GetValueFunc(CurrentKeyFrame));
 
-			FMovieSceneTangentData Tangent;
-			Tangent.TangentWeightMode = RCTWM_WeightedBoth;
-			{
-				const float ArriveTangentX = static_cast<float>(CurrentKeyFrame.Interpolation[TangentAccessIndices.ArriveTangentX]) / 127.0f;
-				const float ArriveTangentY = static_cast<float>(CurrentKeyFrame.Interpolation[TangentAccessIndices.ArriveTangentY]) / 127.0f;
-				const float LeaveTangentX = NextKeyFrame != nullptr
-					? static_cast<float>(NextKeyFrame->Interpolation[TangentAccessIndices.LeaveTangentX]) / 127.0f
-					: 0.0f;
-				const float LeaveTangentY = NextKeyFrame != nullptr
-					? static_cast<float>(NextKeyFrame->Interpolation[TangentAccessIndices.LeaveTangentY]) / 127.0f
-					: 0.0f;
+			const float ArriveTangentX = static_cast<float>(CurrentKeyFrame.Interpolation[TangentAccessIndices.ArriveTangentX]) / 127.0f;
+			const float ArriveTangentY = static_cast<float>(CurrentKeyFrame.Interpolation[TangentAccessIndices.ArriveTangentY]) / 127.0f;
+			const float LeaveTangentX = NextKeyFrame != nullptr
+				? static_cast<float>(NextKeyFrame->Interpolation[TangentAccessIndices.LeaveTangentX]) / 127.0f
+				: 0.0f;
+			const float LeaveTangentY = NextKeyFrame != nullptr
+				? static_cast<float>(NextKeyFrame->Interpolation[TangentAccessIndices.LeaveTangentY]) / 127.0f
+				: 0.0f;
 
-				FVector2D ArriveTangent(ArriveTangentX, ArriveTangentY);
-				FVector2D LeaveTangent(LeaveTangentX, LeaveTangentY);
+			TComputedKey<T> ComputedKey;
+			{
+				ComputedKey.Value = Value;
+				ComputedKey.ArriveTangent = FVector2D(1.0f - ArriveTangentX, 1.0f - ArriveTangentY);
+				ComputedKey.LeaveTangent = FVector2D(LeaveTangentX, LeaveTangentY);
 			}
 
 			if (CameraCutImportType != ECameraCutImportType::ImportAsIs &&
@@ -260,52 +262,115 @@ private:
 
 				if (PreviousKeyFrame != nullptr && CurrentKeyFrame.FrameNumber - PreviousKeyFrame->FrameNumber <= 1 && GetValueFunc(CurrentKeyFrame) != GetValueFunc(*PreviousKeyFrame))
 				{
-					TArray<FFrameNumber> Times;
-					Times.Push(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio);
-
-					TArray<MovieSceneValue> MovieSceneValues;
-					MovieSceneValue MovieSceneValueInstance;
-					{
-						MovieSceneValueInstance.Value = Value;
-						MovieSceneValueInstance.InterpMode = RCIM_Constant;
-						MovieSceneValueInstance.TangentMode = RCTM_Break;
-						MovieSceneValueInstance.Tangent = Tangent;
-					}
-					MovieSceneValues.Push(MovieSceneValueInstance);
-
-					Channel->AddKeys(Times, MovieSceneValues);
+					ComputedKey.Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
+					ComputedKey.InterpMode = RCIM_Constant;
 				}
 				else
 				{
 					if (CameraCutImportType == ECameraCutImportType::ConstantKey)
 					{
-						TArray<FFrameNumber> Times;
-						Times.Push(static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio);
-
-						TArray<MovieSceneValue> MovieSceneValues;
-						MovieSceneValue MovieSceneValueInstance;
-						{
-							MovieSceneValueInstance.Value = Value;
-							MovieSceneValueInstance.InterpMode = RCIM_Constant;
-							MovieSceneValueInstance.TangentMode = RCTM_Break;
-							MovieSceneValueInstance.Tangent = Tangent;
-						}
-						MovieSceneValues.Push(MovieSceneValueInstance);
-
-						Channel->AddKeys(Times, MovieSceneValues);
+						ComputedKey.Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
+						ComputedKey.InterpMode = RCIM_Constant;
 					}
 					else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
 					{
-						const FFrameNumber Time = (static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame;
-						Channel->AddCubicKey(Time, Value, RCTM_Break, Tangent);
+						ComputedKey.Time = (static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame;
+						ComputedKey.InterpMode = RCIM_Cubic;
 					}
 				}
 			}
 			else
 			{
-				const FFrameNumber Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
-				Channel->AddCubicKey(Time, Value, RCTM_Break, Tangent);
+				ComputedKey.Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
+				ComputedKey.InterpMode = RCIM_Cubic;
 			}
+
+			TimeComputedKeys.Push(ComputedKey);
+		}
+
+		for (PTRINT i = 0; i < TimeComputedKeys.Num(); ++i)
+		{
+			const TComputedKey<T>& CurrentKey = TimeComputedKeys[i];
+
+			const TComputedKey<T>* NextKey = (i + 1) < TimeComputedKeys.Num()
+				? &TimeComputedKeys[i + 1]
+				: nullptr;
+
+			const TComputedKey<T>* PreviousKey = 1 <= i
+				? &TimeComputedKeys[i - 1]
+				: nullptr;
+
+			FMovieSceneTangentData Tangent;
+			Tangent.TangentWeightMode = RCTWM_WeightedBoth;
+			{
+				const double DecimalFrameRate = FrameRate.AsDecimal();
+
+				FVector2D ArriveTangentUniform;
+				if (PreviousKey != nullptr)
+				{
+					ArriveTangentUniform = FVector2D(
+						(CurrentKey.Time.Value - PreviousKey->Time.Value) / DecimalFrameRate,
+						CurrentKey.Value - PreviousKey->Value);
+				}
+				else
+				{
+					ArriveTangentUniform = FVector2D(1.0f / DecimalFrameRate, 0.0f);
+				}
+
+				FVector2D LeaveTangentUniform;
+				if (NextKey != nullptr)
+				{
+					LeaveTangentUniform = FVector2D(
+						(NextKey->Time.Value - CurrentKey.Time.Value) / DecimalFrameRate,
+						NextKey->Value - CurrentKey.Value);
+				}
+				else
+				{
+					LeaveTangentUniform = FVector2D(1.0f / DecimalFrameRate, 0.0f);
+				}
+
+				const FVector2D ArriveTangent = CurrentKey.ArriveTangent * ArriveTangentUniform;
+				const FVector2D LeaveTangent = CurrentKey.LeaveTangent * LeaveTangentUniform;
+
+				if (ArriveTangent.X == 0.0f)
+				{
+					Tangent.ArriveTangent = 0.0f;
+				}
+				else
+				{
+					Tangent.ArriveTangent = ArriveTangent.Y / (ArriveTangent.X * DecimalFrameRate);
+				}
+
+				if (LeaveTangent.X == 0.0f)
+				{
+					Tangent.LeaveTangent = 0.0f;
+				}
+				else
+				{
+					Tangent.LeaveTangent = LeaveTangent.Y / (LeaveTangent.X * DecimalFrameRate);
+				}
+
+				Tangent.ArriveTangent = 1.0 / (1.0 * DecimalFrameRate);
+				Tangent.LeaveTangent = 1.0 / (1.0 * DecimalFrameRate);
+
+				Tangent.ArriveTangentWeight = ArriveTangent.Length();
+				Tangent.LeaveTangentWeight = LeaveTangent.Length();
+			}
+
+			TArray<FFrameNumber> Times;
+			Times.Push(CurrentKey.Time);
+
+			TArray<MovieSceneValue> MovieSceneValues;
+			MovieSceneValue MovieSceneValueInstance;
+			{
+				MovieSceneValueInstance.Value = CurrentKey.Value;
+				MovieSceneValueInstance.InterpMode = CurrentKey.InterpMode;
+				MovieSceneValueInstance.TangentMode = RCTM_Break;
+				MovieSceneValueInstance.Tangent = Tangent;
+			}
+			MovieSceneValues.Push(MovieSceneValueInstance);
+
+			Channel->AddKeys(Times, MovieSceneValues);
 		}
 	}
 
@@ -352,5 +417,15 @@ private:
 		PTRINT ArriveTangentY;
 		PTRINT LeaveTangentX;
 		PTRINT LeaveTangentY;
+	};
+
+	template<typename T>
+	struct TComputedKey
+	{
+		FFrameNumber Time;
+		T Value;
+		ERichCurveInterpMode InterpMode;
+		FVector2D ArriveTangent;
+		FVector2D LeaveTangent;
 	};
 };

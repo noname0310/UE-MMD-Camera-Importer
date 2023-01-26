@@ -2,13 +2,17 @@
 
 ## Unreal Engine plugin for import MMD Camera Animation
 
-![Alt text](Plugins/MMDCameraImporter/Resources/Icon128.png)
+![Logo](Plugins/MMDCameraImporter/Resources/Icon128.png)
 
 - Tested on Unreal Engine 5.0.3, 5.1.0
 
 ## Installation
 
-WIP
+### [Download Link](https://downgit.github.io/#/home?url=https://github.com/noname0310/UE-MMD-Camera-Importer/tree/master/Plugins/MMDCameraImporter)
+
+- Close the Unreal Editor
+
+- Download the plugin from the link above and extract it into the `{ProjectRoot}/Plugins` folder of the project. If you don't have a folder, create it.
 
 ## How to use
 
@@ -18,13 +22,13 @@ If the plugin was installed, a VMD button would appear on the far right side of 
 
 Press the button and select the desired camera motion file.
 
-![Import option](docs/fig8.png)
+![import option](docs/fig8.png)
 
 After that, the import option will come out. By default, you do not need to touch any settings.
 
 Press Import to bring up camera motion.
 
-![Imported](docs/fig9.png)
+![imported](docs/fig9.png)
 
 The mmd camera is created and the keyframe is loaded.
 

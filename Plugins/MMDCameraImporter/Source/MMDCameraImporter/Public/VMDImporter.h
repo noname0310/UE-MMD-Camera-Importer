@@ -122,6 +122,9 @@ class FVmdImporter
 private:
 	struct FTangentAccessIndices;
 
+	template<typename T>
+	struct TComputedKey;
+
 public:
 	void SetFilePath(const FString& InFilePath);
 	bool IsValidVmdFile();
@@ -288,6 +291,19 @@ private:
 			TimeComputedKeys.Push(ComputedKey);
 		}
 
+		ImportComputedKeysToChannel<T, MovieSceneChannel, MovieSceneValue>(
+			TimeComputedKeys,
+			Channel,
+			FrameRate);
+	}
+
+	template<typename T, typename MovieSceneChannel, typename MovieSceneValue>
+	static void ImportComputedKeysToChannel(
+		TArray<TComputedKey<T>>& TimeComputedKeys,
+		MovieSceneChannel* Channel,
+		const FFrameRate FrameRate
+	)
+	{
 		for (PTRINT i = 0; i < TimeComputedKeys.Num(); ++i)
 		{
 			const TComputedKey<T>& CurrentKey = TimeComputedKeys[i];

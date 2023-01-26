@@ -304,6 +304,9 @@ private:
 		const FFrameRate FrameRate
 	)
 	{
+		TArray<FFrameNumber> Times;
+		TArray<MovieSceneValue> MovieSceneValues;
+
 		for (PTRINT i = 0; i < TimeComputedKeys.Num(); ++i)
 		{
 			const TComputedKey<T>& CurrentKey = TimeComputedKeys[i];
@@ -370,10 +373,8 @@ private:
 				Tangent.LeaveTangentWeight = LeaveTangent.Length();
 			}
 
-			TArray<FFrameNumber> Times;
 			Times.Push(CurrentKey.Time);
 
-			TArray<MovieSceneValue> MovieSceneValues;
 			MovieSceneValue MovieSceneValueInstance;
 			{
 				MovieSceneValueInstance.Value = CurrentKey.Value;
@@ -382,9 +383,9 @@ private:
 				MovieSceneValueInstance.Tangent = Tangent;
 			}
 			MovieSceneValues.Push(MovieSceneValueInstance);
-
-			Channel->AddKeys(Times, MovieSceneValues);
 		}
+
+		Channel->AddKeys(Times, MovieSceneValues);
 	}
 
 	// T must be number

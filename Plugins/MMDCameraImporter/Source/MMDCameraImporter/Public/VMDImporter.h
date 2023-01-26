@@ -304,7 +304,8 @@ private:
 		const FFrameRate FrameRate
 	)
 	{
-		TMovieSceneChannelData<typename MovieSceneChannel::ChannelValueType> ChannelData = Channel->GetData();
+		TArray<FFrameNumber> Times;
+		TArray<typename MovieSceneChannel::ChannelValueType> MovieSceneValues;
 
 		for (PTRINT i = 0; i < TimeComputedKeys.Num(); ++i)
 		{
@@ -371,7 +372,9 @@ private:
 				Tangent.ArriveTangentWeight = ArriveTangent.Length();
 				Tangent.LeaveTangentWeight = LeaveTangent.Length();
 			}
-			
+
+			Times.Push(CurrentKey.Time);
+
 			typename MovieSceneChannel::ChannelValueType MovieSceneValueInstance;
 			{
 				MovieSceneValueInstance.Value = CurrentKey.Value;
@@ -379,9 +382,10 @@ private:
 				MovieSceneValueInstance.TangentMode = RCTM_Break;
 				MovieSceneValueInstance.Tangent = Tangent;
 			}
-
-			ChannelData.AddKey(CurrentKey.Time, MovieSceneValueInstance);
+			MovieSceneValues.Push(MovieSceneValueInstance);
 		}
+
+		Channel->AddKeys(Times, MovieSceneValues);
 	}
 
 	// T must be number

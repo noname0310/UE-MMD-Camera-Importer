@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "CineCameraComponent.h"
+#include "ISequencer.h"
 #include "MMDUserImportVMDSettings.h"
-#include "MovieSceneSequence.h"
 #include "Channels/MovieSceneDoubleChannel.h"
 
 // TODO: little endian check

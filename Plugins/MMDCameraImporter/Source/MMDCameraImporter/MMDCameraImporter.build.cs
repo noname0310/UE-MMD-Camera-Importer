@@ -29,6 +29,7 @@ public class MMDCameraImporter : ModuleRules
                 "Core",
                 "MovieScene",
                 "CinematicCamera",
+                "Sequencer",
                 // ... add other public dependencies that you statically link with here ...
             }
         );

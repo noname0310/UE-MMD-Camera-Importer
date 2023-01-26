@@ -157,7 +157,7 @@ void FMmdCameraImporterModule::StartupModule()
 
 #if ENGINE_MAJOR_VERSION < 5 || (ENGINE_MAJOR_VERSION == 5 && ENGINE_MINOR_VERSION == 0)
 	RegisterMenus();
-#elif
+#else
 	UToolMenus::RegisterStartupCallback(FSimpleMulticastDelegate::FDelegate::CreateRaw(this, &FMmdCameraImporterModule::RegisterMenus));
 #endif
 }
@@ -205,7 +205,7 @@ void FMmdCameraImporterModule::RegisterMenus()
 		const TSharedPtr<FExtensibilityManager> ToolBarExtensibilityManager = SequencerModule.GetToolBarExtensibilityManager();
 		ToolBarExtensibilityManager->AddExtender(SequencerToolBarExtender);
 	}
-#elif 
+#else 
 	{
 		const FName SequencerToolbarStyleName = "SequencerToolbar";
 

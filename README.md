@@ -4,7 +4,7 @@
 
 ![Alt text](Plugins/MMDCameraImporter/Resources/Icon128.png)
 
-- Tested on Unreal Engine 5.0.3
+- Tested on Unreal Engine 5.0.3, 5.1.0
 
 ## Installation
 

@@ -7,6 +7,7 @@
 #include "MMDCameraImporterCommands.h"
 #include "MMDCameraImporterStyle.h"
 #include "MMDUserImportVMDSettings.h"
+#include "MovieSceneSequence.h"
 #include "MovieSceneToolHelpers.h"
 #include "ToolMenus.h"
 #include "VMDImporter.h"

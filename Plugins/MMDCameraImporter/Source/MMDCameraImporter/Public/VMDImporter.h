@@ -334,7 +334,7 @@ private:
 
 				if (ArriveTangent.X == 0.0f)
 				{
-					Tangent.ArriveTangent = 0.0f;
+					Tangent.ArriveTangent = 1.0f;
 				}
 				else
 				{
@@ -343,15 +343,12 @@ private:
 
 				if (LeaveTangent.X == 0.0f)
 				{
-					Tangent.LeaveTangent = 0.0f;
+					Tangent.LeaveTangent = 1.0f;
 				}
 				else
 				{
 					Tangent.LeaveTangent = LeaveTangent.Y / (LeaveTangent.X * DecimalFrameRate);
 				}
-
-				Tangent.ArriveTangent = 1.0 / (1.0 * DecimalFrameRate);
-				Tangent.LeaveTangent = 1.0 / (1.0 * DecimalFrameRate);
 
 				Tangent.ArriveTangentWeight = ArriveTangent.Length();
 				Tangent.LeaveTangentWeight = LeaveTangent.Length();

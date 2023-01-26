@@ -1,4 +1,4 @@
-# Mmd Importer Plugin
+# Mmd Camera Importer Plugin
 
 ## Unreal Engine plugin for import MMD Camera Animation
 

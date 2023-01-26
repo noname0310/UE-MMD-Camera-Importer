@@ -552,6 +552,7 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 	}
 
 	FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
+	TMovieSceneChannelData<FMovieSceneFloatValue> ChannelData = Channel->GetData();
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
 	const FFrameRate FrameRate = FloatSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
 	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
@@ -597,7 +598,10 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 
 	if (0 < CameraCutRanges.Num() && CameraCutRanges[0].GetLowerBoundValue() != 0)
 	{
-		Channel->AddConstantKey(0, MotionBlurAmount);
+		FMovieSceneFloatValue MovieSceneFloatValue;
+		MovieSceneFloatValue.Value = MotionBlurAmount;
+		MovieSceneFloatValue.InterpMode = RCIM_Constant;
+		ChannelData.AddKey(0, MovieSceneFloatValue);
 	}
 
 	for (TRange<uint32>& CameraCutRange : CameraCutRanges)
@@ -605,15 +609,28 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 		const uint32 LowerBound = CameraCutRange.GetLowerBoundValue();
 		const uint32 UpperBound = CameraCutRange.GetUpperBoundValue();
 
+
 		if (CameraCutImportType == ECameraCutImportType::ImportAsIs)
 		{
-			Channel->AddConstantKey(static_cast<int32>(LowerBound) * FrameRatio, 0.0f);
+			FMovieSceneFloatValue MovieSceneFloatValue;
+			MovieSceneFloatValue.Value = 0.0f;
+			MovieSceneFloatValue.InterpMode = RCIM_Constant;
+			ChannelData.AddKey(static_cast<int32>(LowerBound) * FrameRatio, MovieSceneFloatValue);
 		}
 		else
 		{
-			Channel->AddConstantKey((static_cast<int32>(LowerBound + 1) * FrameRatio) - OneSampleFrame, 0.0f);
+			FMovieSceneFloatValue MovieSceneFloatValue;
+			MovieSceneFloatValue.Value = 0.0f;
+			MovieSceneFloatValue.InterpMode = RCIM_Constant;
+			ChannelData.AddKey((static_cast<int32>(LowerBound + 1) * FrameRatio) - OneSampleFrame, MovieSceneFloatValue);
 		}
-		Channel->AddConstantKey((static_cast<int32>(UpperBound) * FrameRatio) + OneSampleFrame, MotionBlurAmount);
+
+		{
+			FMovieSceneFloatValue MovieSceneFloatValue;
+			MovieSceneFloatValue.Value = MotionBlurAmount;
+			MovieSceneFloatValue.InterpMode = RCIM_Constant;
+			ChannelData.AddKey((static_cast<int32>(UpperBound) * FrameRatio) + OneSampleFrame, MovieSceneFloatValue);
+		}
 	}
 
 	return true;

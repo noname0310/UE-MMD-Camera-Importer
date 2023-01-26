@@ -492,7 +492,7 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 		TangentAccessIndices.LeaveTangentY = 22;
 	}
 
-	ImportCameraSingleChannel<float, FMovieSceneFloatChannel, FMovieSceneFloatValue>(
+	ImportCameraSingleChannel<float, FMovieSceneFloatChannel>(
 		CameraKeyFrames,
 		Channel,
 		SampleRate,
@@ -663,7 +663,7 @@ bool FVmdImporter::ImportVmdCameraTransform(
 		TangentAccessIndices.LeaveTangentY = 18;
 	}
 
-	ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+	ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 		CameraKeyFrames,
 		LocationXChannel,
 		SampleRate,
@@ -728,7 +728,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			LocationXTangentAccessIndices.LeaveTangentY = 2;
 		}
 
-		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 			CameraKeyFrames,
 			Channels[0], // Location X
 			SampleRate,
@@ -754,7 +754,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			LocationYTangentAccessIndices.LeaveTangentY = 6;
 		}
 
-		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 			CameraKeyFrames,
 			Channels[1], // Location Y
 			SampleRate,
@@ -780,7 +780,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			LocationZTangentAccessIndices.LeaveTangentY = 10;
 		}
 
-		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 			CameraKeyFrames,
 			Channels[2], // Location Z
 			SampleRate,
@@ -806,7 +806,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			RotationTangentAccessIndices.LeaveTangentY = 14;
 		}
 
-		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 			CameraKeyFrames,
 			Channels[3], // Rotation X
 			SampleRate,
@@ -817,12 +817,12 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			{
 				return KeyFrames.Rotation[2];
 			},
-			[UniformScale](const double Value)
+			[](const double Value)
 			{
 				return FMath::RadiansToDegrees(Value);
 			});
 
-		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 			CameraKeyFrames,
 			Channels[4], // Rotation Y
 			SampleRate,
@@ -833,12 +833,12 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			{
 				return KeyFrames.Rotation[0];
 			},
-			[UniformScale](const double Value)
+			[](const double Value)
 			{
 				return FMath::RadiansToDegrees(Value);
 			});
 
-		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel, FMovieSceneDoubleValue>(
+		ImportCameraSingleChannel<double, FMovieSceneDoubleChannel>(
 			CameraKeyFrames,
 			Channels[5], // Rotation Z
 			SampleRate,
@@ -849,7 +849,7 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 			{
 				return KeyFrames.Rotation[1];
 			},
-			[UniformScale](const double Value)
+			[](const double Value)
 			{
 				return -FMath::RadiansToDegrees(Value);
 			});

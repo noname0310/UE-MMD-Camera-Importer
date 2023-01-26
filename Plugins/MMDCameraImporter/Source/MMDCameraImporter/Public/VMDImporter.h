@@ -375,7 +375,7 @@ private:
 
 			Times.Push(CurrentKey.Time);
 
-			MovieSceneValue MovieSceneValueInstance;
+			typename MovieSceneChannel::ChannelValueType MovieSceneValueInstance;
 			{
 				MovieSceneValueInstance.Value = CurrentKey.Value;
 				MovieSceneValueInstance.InterpMode = CurrentKey.InterpMode;

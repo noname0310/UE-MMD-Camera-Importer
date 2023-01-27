@@ -525,6 +525,7 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 	UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(ObjectBinding, TrackName);
 	if (FloatTrack == nullptr)
 	{
+		MovieScene->Modify();
 		FloatTrack = MovieScene->AddTrack<UMovieSceneFloatTrack>(ObjectBinding);
 		FloatTrack->SetPropertyNameAndPath("MotionBlurAmount", "PostProcessSettings.MotionBlurAmount");
 	}

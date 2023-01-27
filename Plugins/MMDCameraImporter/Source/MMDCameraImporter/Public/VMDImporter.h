@@ -192,7 +192,7 @@ private:
 	// T must be double or float
 	// MovieSceneChannel must be FMovieSceneDoubleChannel or FMovieSceneFloatChannel
 	// MovieSceneValue must be FMovieSceneDoubleValue or FMovieSceneFloatValue
-	template<typename T, typename MovieSceneChannel>
+	template<typename MovieSceneChannel>
 	static void ImportCameraSingleChannel(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
 		MovieSceneChannel* Channel,
@@ -200,10 +200,12 @@ private:
 		const FFrameRate FrameRate,
 		const ECameraCutImportType CameraCutImportType,
 		const FTangentAccessIndices TangentAccessIndices,
-		const TFunction<T(const FVmdObject::FCameraKeyFrame&)> GetValueFunc,
-		const TFunction<T(const T)> MapFunc
+		const TFunction<typename MovieSceneChannel::CurveValueType(const FVmdObject::FCameraKeyFrame&)> GetValueFunc,
+		const TFunction<typename MovieSceneChannel::CurveValueType(const typename MovieSceneChannel::CurveValueType)> MapFunc
 	)
 	{
+		using T = typename MovieSceneChannel::CurveValueType;
+
 		if (CameraKeyFrames.Num() == 0)
 		{
 			return;
@@ -291,19 +293,21 @@ private:
 			TimeComputedKeys.Push(ComputedKey);
 		}
 
-		ImportComputedKeysToChannel<T, MovieSceneChannel>(
+		ImportComputedKeysToChannel<MovieSceneChannel>(
 			TimeComputedKeys,
 			Channel,
 			FrameRate);
 	}
 
-	template<typename T, typename MovieSceneChannel>
+	template<typename MovieSceneChannel>
 	static void ImportComputedKeysToChannel(
-		TArray<TComputedKey<T>>& TimeComputedKeys,
+		TArray<TComputedKey<typename MovieSceneChannel::CurveValueType>>& TimeComputedKeys,
 		MovieSceneChannel* Channel,
 		const FFrameRate FrameRate
 	)
 	{
+		using T = typename MovieSceneChannel::CurveValueType;
+
 		TMovieSceneChannelData<typename MovieSceneChannel::ChannelValueType> ChannelData = Channel->GetData();
 		
 		for (PTRINT i = 0; i < TimeComputedKeys.Num(); ++i)

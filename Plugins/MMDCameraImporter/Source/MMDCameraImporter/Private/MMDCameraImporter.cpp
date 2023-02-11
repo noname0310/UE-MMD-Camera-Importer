@@ -279,7 +279,7 @@ bool FMmdCameraImporterModule::ImportVmdWithDialog(UMovieSceneSequence* InSequen
 		.Title(TitleText)
 		.HasCloseButton(true)
 		.SizingRule(ESizingRule::UserSized)
-		.ClientSize(FVector2D(480.0f, 290.0f))
+		.ClientSize(FVector2D(480.0f, 310.0f))
 		.AutoCenter(EAutoCenter::PreferredWorkArea)
 		.SupportsMinimize(false);
 

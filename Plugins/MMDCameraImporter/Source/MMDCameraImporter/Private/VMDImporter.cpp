@@ -290,8 +290,12 @@ void FVmdImporter::ImportVmdCamera(
 		return;
 	}
 
-	FGuid MmdCameraGuid;
-	FGuid MmdCameraCenterGuid;
+	TArray<FGuid> CameraGuids;
+	TArray<FGuid> CameraCenterGuids;
+	CameraGuids.Reserve(ImportVmdSettings->CameraCount);
+	CameraCenterGuids.Reserve(ImportVmdSettings->CameraCount);
+
+	for (PTRINT i = 0; i < ImportVmdSettings->CameraCount; ++i)
 	{
 		UWorld* World = GCurrentLevelEditingViewportClient ? GCurrentLevelEditingViewportClient->GetWorld() : nullptr;
 		check(World != nullptr && "World is null");
@@ -299,7 +303,7 @@ void FVmdImporter::ImportVmdCamera(
 		FActorSpawnParameters CameraCenterSpawnParams;
 		CameraCenterSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		AActor* NewCameraCenter = World->SpawnActor<AActor>(CameraCenterSpawnParams);
-		NewCameraCenter->SetActorLabel("MmdCameraCenter");
+		NewCameraCenter->SetActorLabel(FString::Format(TEXT("MmdCameraCenter{0}"), { i }));
 		USceneComponent* RootSceneComponent = NewObject<USceneComponent>(NewCameraCenter, TEXT("SceneComponent"));
 		NewCameraCenter->SetRootComponent(RootSceneComponent);
 		NewCameraCenter->AddInstanceComponent(RootSceneComponent);
@@ -307,7 +311,7 @@ void FVmdImporter::ImportVmdCamera(
 		FActorSpawnParameters CameraSpawnParams;
 		CameraSpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		ACineCameraActor* NewCamera = World->SpawnActor<ACineCameraActor>(CameraSpawnParams);
-		NewCamera->SetActorLabel("MmdCamera");
+		NewCamera->SetActorLabel(FString::Format(TEXT("MmdCamera{0}"), { i }));
 
 		NewCamera->AttachToActor(NewCameraCenter, FAttachmentTransformRules(EAttachmentRule::KeepWorld, true));
 
@@ -353,9 +357,9 @@ void FVmdImporter::ImportVmdCamera(
 		NewActors.Add(NewCameraCenter);
 		NewActors.Add(NewCamera);
 		TArray<FGuid> NewActorGuids = InSequencer.AddActors(NewActors);
-
-		MmdCameraCenterGuid = NewActorGuids[0];
-		MmdCameraGuid = NewActorGuids[1];
+		
+		CameraCenterGuids.Add(NewActorGuids[0]);
+		CameraGuids.Add(NewActorGuids[1]);
 	}
 
 	ImportVmdCameraToExisting(
@@ -363,8 +367,8 @@ void FVmdImporter::ImportVmdCamera(
 		InSequence,
 		&InSequencer,
 		InSequencer.GetFocusedTemplateID(),
-		MmdCameraGuid,
-		MmdCameraCenterGuid,
+		CameraGuids,
+		CameraCenterGuids,
 		ImportVmdSettings);
 }
 
@@ -378,112 +382,171 @@ void FVmdImporter::ImportVmdCameraToExisting(
 	UMovieSceneSequence* InSequence,
 	IMovieScenePlayer* Player,
 	FMovieSceneSequenceIDRef TemplateID,
-	const FGuid MmdCameraGuid,
-	const FGuid MmdCameraCenterGuid,
+	const TArray<FGuid>& CameraGuids,
+	const TArray<FGuid>& CameraCenterGuids,
 	const UMmdUserImportVmdSettings* ImportVmdSettings
 )
 {
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
-	
-	const TArrayView<TWeakObjectPtr<>> BoundObjects = Player->FindBoundObjects(MmdCameraGuid, TemplateID);
-	for (TWeakObjectPtr<>& WeakObject : BoundObjects)
+
+	TArray<FGuid> CameraPropertyOwnerGuids;
+	TArray<UCineCameraComponent*> CameraComponents;
+
+	// ReSharper disable once CppUseStructuredBinding
+	for (const FGuid& MmdCameraGuid : CameraGuids)
 	{
-		// ReSharper disable once CppTooWideScopeInitStatement
-		UObject* FoundObject = WeakObject.Get();
-
-		if (FoundObject && FoundObject->GetClass()->IsChildOf(ACineCameraActor::StaticClass()))
+		const TArrayView<TWeakObjectPtr<>> BoundObjects = Player->FindBoundObjects(MmdCameraGuid, TemplateID);
+		for (TWeakObjectPtr<>& WeakObject : BoundObjects)
 		{
-			const ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(FoundObject);
-			UCineCameraComponent* CameraComponent = CineCameraActor->GetCineCameraComponent();
+			// ReSharper disable once CppTooWideScopeInitStatement
+			UObject* FoundObject = WeakObject.Get();
 
-
-			// Set the default value of the current focal length or field of view section
-			//FGuid PropertyOwnerGuid = Player->GetHandleToObject(CameraComponent);
-			FGuid PropertyOwnerGuid = GetHandleToObject(CameraComponent, InSequence, Player, TemplateID, true);
-
-			if (!PropertyOwnerGuid.IsValid())
+			if (FoundObject && FoundObject->GetClass()->IsChildOf(ACineCameraActor::StaticClass()))
 			{
-				continue;
-			}
+				const ACineCameraActor* CineCameraActor = Cast<ACineCameraActor>(FoundObject);
+				UCineCameraComponent* CameraComponent = CineCameraActor->GetCineCameraComponent();
 
-			// If copying properties to a spawnable object, the template object must be updated
-			// ReSharper disable once CppTooWideScope
-			FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(MmdCameraGuid);
-			if (Spawnable)
-			{
-				Spawnable->CopyObjectTemplate(*FoundObject, *InSequence);
-			}
 
-			ImportVmdCameraFocalLengthProperty(
-				InVmdParseResult.CameraKeyFrames,
-				PropertyOwnerGuid,
-				InSequence,
-				CameraComponent,
-				ImportVmdSettings);
+				// Set the default value of the current focal length or field of view section
+				//FGuid PropertyOwnerGuid = Player->GetHandleToObject(CameraComponent);
+				FGuid PropertyOwnerGuid = GetHandleToObject(CameraComponent, InSequence, Player, TemplateID, true);
 
-			if (ImportVmdSettings->bAddMotionBlurKey)
-			{
-				CreateVmdCameraMotionBlurProperty(
-					InVmdParseResult.CameraKeyFrames,
-					PropertyOwnerGuid,
-					InSequence,
-					ImportVmdSettings);
+				if (!PropertyOwnerGuid.IsValid())
+				{
+					continue;
+				}
+
+				// If copying properties to a spawnable object, the template object must be updated
+				// ReSharper disable once CppTooWideScope
+				FMovieSceneSpawnable* Spawnable = MovieScene->FindSpawnable(MmdCameraGuid);
+				if (Spawnable)
+				{
+					Spawnable->CopyObjectTemplate(*FoundObject, *InSequence);
+				}
+
+				CameraPropertyOwnerGuids.Add(PropertyOwnerGuid);
+				CameraComponents.Add(CameraComponent);
 			}
 		}
 	}
 
+	check(CameraPropertyOwnerGuids.Num() == CameraGuids.Num());
+	check(CameraComponents.Num() == CameraGuids.Num());
+
+	const TArray<TRange<uint32>> CameraCuts = ImportVmdSettings->CameraCount == 1
+		? TArray{ TRange<uint32>(0, InVmdParseResult.CameraKeyFrames.Last().FrameNumber + 1) }
+	    : ComputeCameraCuts(InVmdParseResult.CameraKeyFrames);
+	
+	CreateCameraCutTrack(CameraCuts, CameraGuids, InSequence);
+
+	ImportVmdCameraFocalLengthProperty(
+		InVmdParseResult.CameraKeyFrames,
+		CameraCuts,
+		CameraPropertyOwnerGuids,
+		InSequence,
+		CameraComponents,
+		ImportVmdSettings);
+
+	if (ImportVmdSettings->bAddMotionBlurKey)
+	{
+		CreateVmdCameraMotionBlurProperty(
+			InVmdParseResult.CameraKeyFrames,
+			CameraCuts,
+			CameraPropertyOwnerGuids,
+			InSequence,
+			ImportVmdSettings);
+	}
+
 	ImportVmdCameraTransform(
 		InVmdParseResult.CameraKeyFrames,
-		MmdCameraGuid,
+		CameraCuts,
+		CameraGuids,
 		InSequence,
 		ImportVmdSettings);
 
 	ImportVmdCameraCenterTransform(
 		InVmdParseResult.CameraKeyFrames,
-		MmdCameraCenterGuid,
+		CameraCuts,
+		CameraCenterGuids,
 		InSequence,
 		ImportVmdSettings);
 }
 
+void FVmdImporter::CreateCameraCutTrack(
+	const TArray<TRange<uint32>>& InCameraCuts,
+	const TArray<FGuid>& ObjectBindings,
+	const UMovieSceneSequence* InSequence
+)
+{
+	UMovieScene* MovieScene = InSequence->GetMovieScene();
+
+	UMovieSceneCameraCutTrack* CameraCutTrack = GetCameraCutTrack(MovieScene);
+	const FFrameRate FrameRate = CameraCutTrack->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
+
+	CameraCutTrack->RemoveAllAnimationData();
+
+	for (PTRINT i = 0; i < InCameraCuts.Num(); ++i)
+	{
+		const TRange<uint32>& CameraCut = InCameraCuts[i];
+		const FGuid CameraBinding = ObjectBindings[i % ObjectBindings.Num()];
+		CameraCutTrack->AddNewCameraCut(
+			UE::MovieScene::FRelativeObjectBindingID(CameraBinding),
+			static_cast<int>(CameraCut.GetLowerBoundValue() * FrameRatio));
+	}
+}
+
 bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-	const FGuid ObjectBinding,
+	const TArray<TRange<uint32>>& InCameraCuts,
+	const TArray<FGuid>& ObjectBindings,
 	const UMovieSceneSequence* InSequence,
-	const UCineCameraComponent* InCineCameraComponent,
+	const TArray<UCineCameraComponent*>& InCineCameraComponents,
 	const UMmdUserImportVmdSettings* ImportVmdSettings
 )
 {
+	check(ObjectBindings.Num() != 0);
+	check(InCineCameraComponents.Num() != 0);
+
 	const UMovieScene* MovieScene = InSequence->GetMovieScene();
 
 	const FName TrackName = TEXT("CurrentFocalLength");
-	
-	UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(ObjectBinding, TrackName);
-	if (FloatTrack == nullptr)
+
+	TArray<FMovieSceneFloatChannel*> Channels;
+	Channels.Reserve(ObjectBindings.Num());
+
+	for (FGuid ObjectBinding : ObjectBindings)
 	{
-		return false;
+		UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(ObjectBinding, TrackName);
+		if (FloatTrack == nullptr)
+		{
+			return false;
+		}
+
+		FloatTrack->Modify();
+		FloatTrack->RemoveAllAnimationData();
+
+		bool bSectionAdded = false;
+		UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(FloatTrack->FindOrAddSection(0, bSectionAdded));
+		if (!FloatSection)
+		{
+			return false;
+		}
+
+		FloatSection->Modify();
+
+		if (bSectionAdded)
+		{
+			FloatSection->SetRange(TRange<FFrameNumber>::All());
+		}
+
+		FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
+		Channels.Add(Channel);
 	}
 
-	FloatTrack->Modify();
-	FloatTrack->RemoveAllAnimationData();
-
-	bool bSectionAdded = false;
-	UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(FloatTrack->FindOrAddSection(0, bSectionAdded));
-	if (!FloatSection)
-	{
-		return false;
-	}
-
-	FloatSection->Modify();
-
-	if (bSectionAdded)
-	{
-		FloatSection->SetRange(TRange<FFrameNumber>::All());
-	}
-
-	FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
-	const FFrameRate FrameRate = FloatSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
-	const float SensorWidth = InCineCameraComponent->Filmback.SensorWidth;
+	const FFrameRate FrameRate = MovieScene->GetTickResolution();
+	const float SensorWidth = InCineCameraComponents.Last()->Filmback.SensorWidth;
 	FTangentAccessIndices TangentAccessIndices;
 	{
 		TangentAccessIndices.ArriveTangentX = 21;
@@ -494,7 +557,8 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 
 	ImportCameraSingleChannel(
 		CameraKeyFrames,
-		Channel,
+		InCameraCuts,
+		Channels,
 		SampleRate,
 		FrameRate,
 		ImportVmdSettings->CameraCutImportType,
@@ -513,7 +577,8 @@ bool FVmdImporter::ImportVmdCameraFocalLengthProperty(
 
 bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-	const FGuid ObjectBinding,
+	const TArray<TRange<uint32>>& InCameraCuts,
+	const TArray<FGuid>& ObjectBindings,
 	const UMovieSceneSequence* InSequence,
 	const UMmdUserImportVmdSettings* ImportVmdSettings
 )
@@ -521,47 +586,57 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
 
 	const FName TrackName = TEXT("PostProcessSettings.MotionBlurAmount");
-	
-	UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(ObjectBinding, TrackName);
-	if (FloatTrack == nullptr)
+
+	TArray<FMovieSceneFloatChannel*> Channels;
+	Channels.Reserve(ObjectBindings.Num());
+
+	for (FGuid ObjectBinding : ObjectBindings)
 	{
-		MovieScene->Modify();
-		FloatTrack = MovieScene->AddTrack<UMovieSceneFloatTrack>(ObjectBinding);
-		FloatTrack->SetPropertyNameAndPath("MotionBlurAmount", "PostProcessSettings.MotionBlurAmount");
+		UMovieSceneFloatTrack* FloatTrack = MovieScene->FindTrack<UMovieSceneFloatTrack>(ObjectBinding, TrackName);
+		if (FloatTrack == nullptr)
+		{
+			MovieScene->Modify();
+			FloatTrack = MovieScene->AddTrack<UMovieSceneFloatTrack>(ObjectBinding);
+			FloatTrack->SetPropertyNameAndPath("MotionBlurAmount", "PostProcessSettings.MotionBlurAmount");
+		}
+
+		FloatTrack->Modify();
+		FloatTrack->RemoveAllAnimationData();
+
+		bool bSectionAdded = false;
+		UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(FloatTrack->FindOrAddSection(0, bSectionAdded));
+		if (!FloatSection)
+		{
+			return false;
+		}
+
+		FloatSection->Modify();
+
+		if (bSectionAdded)
+		{
+			FloatSection->SetRange(TRange<FFrameNumber>::All());
+		}
+
+		if (CameraKeyFrames.Num() == 0)
+		{
+			return true;
+		}
+
+		FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
+		Channels.Add(Channel);
 	}
 
-	FloatTrack->Modify();
-	FloatTrack->RemoveAllAnimationData();
-
-	bool bSectionAdded = false;
-	UMovieSceneFloatSection* FloatSection = Cast<UMovieSceneFloatSection>(FloatTrack->FindOrAddSection(0, bSectionAdded));
-	if (!FloatSection)
-	{
-		return false;
-	}
-
-	FloatSection->Modify();
-
-	if (bSectionAdded)
-	{
-		FloatSection->SetRange(TRange<FFrameNumber>::All());
-	}
-
-	if (CameraKeyFrames.Num() == 0)
-	{
-		return true;
-	}
-
-	FMovieSceneFloatChannel* Channel = FloatSection->GetChannelProxy().GetChannel<FMovieSceneFloatChannel>(0);
-	TMovieSceneChannelData<FMovieSceneFloatValue> ChannelData = Channel->GetData();
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
-	const FFrameRate FrameRate = FloatSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const FFrameRate FrameRate = MovieScene->GetTickResolution();
 	const FFrameNumber OneSampleFrame = (FrameRate / SampleRate).AsFrameNumber(1);
 	const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
 	const float MotionBlurAmount = ImportVmdSettings->MotionBlurAmount;
 	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
 
-	Channel->SetDefault(MotionBlurAmount);
+	for (FMovieSceneFloatChannel* MovieSceneFloatChannel : Channels)
+	{
+		MovieSceneFloatChannel->SetDefault(MotionBlurAmount);
+	}
 
 	TArray<TRange<uint32>> CameraCutRanges;
 	{
@@ -597,12 +672,14 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 		}
 	}
 
+	TArray<TPair<FFrameNumber, FMovieSceneFloatValue>> Keys;
+
 	if (0 < CameraCutRanges.Num() && CameraCutRanges[0].GetLowerBoundValue() != 0)
 	{
 		FMovieSceneFloatValue MovieSceneFloatValue;
 		MovieSceneFloatValue.Value = MotionBlurAmount;
 		MovieSceneFloatValue.InterpMode = RCIM_Constant;
-		ChannelData.AddKey(0, MovieSceneFloatValue);
+		Keys.Add({ 0, MovieSceneFloatValue });
 	}
 
 	for (TRange<uint32>& CameraCutRange : CameraCutRanges)
@@ -616,22 +693,72 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 			FMovieSceneFloatValue MovieSceneFloatValue;
 			MovieSceneFloatValue.Value = 0.0f;
 			MovieSceneFloatValue.InterpMode = RCIM_Constant;
-			ChannelData.AddKey(static_cast<int32>(LowerBound) * FrameRatio, MovieSceneFloatValue);
+			Keys.Add({ static_cast<int32>(LowerBound) * FrameRatio, MovieSceneFloatValue });
 		}
 		else
 		{
 			FMovieSceneFloatValue MovieSceneFloatValue;
 			MovieSceneFloatValue.Value = 0.0f;
 			MovieSceneFloatValue.InterpMode = RCIM_Constant;
-			ChannelData.AddKey((static_cast<int32>(LowerBound + 1) * FrameRatio) - OneSampleFrame, MovieSceneFloatValue);
+			Keys.Add({ (static_cast<int32>(LowerBound + 1) * FrameRatio) - OneSampleFrame, MovieSceneFloatValue });
 		}
 
 		{
 			FMovieSceneFloatValue MovieSceneFloatValue;
 			MovieSceneFloatValue.Value = MotionBlurAmount;
 			MovieSceneFloatValue.InterpMode = RCIM_Constant;
-			ChannelData.AddKey((static_cast<int32>(UpperBound) * FrameRatio) + OneSampleFrame, MovieSceneFloatValue);
+			Keys.Add({ (static_cast<int32>(UpperBound) * FrameRatio) + OneSampleFrame, MovieSceneFloatValue });
 		}
+	}
+
+	PTRINT CurrentCameraCutIndex = 0;
+	for (PTRINT i = 0; i < Keys.Num(); ++i)
+	{
+		const TPair<FFrameNumber, FMovieSceneFloatValue>& CurrentKey = Keys[i];
+
+		while(static_cast<int32>(InCameraCuts[CurrentCameraCutIndex].GetUpperBoundValue() * FrameRatio) <= CurrentKey.Key)
+		{
+			CurrentCameraCutIndex += 1;
+
+			TMovieSceneChannelData<FMovieSceneFloatValue> PreviousChannelData = Channels[(CurrentCameraCutIndex - 1) % Channels.Num()]->GetData();
+			TMovieSceneChannelData<FMovieSceneFloatValue> CurrentChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
+			const TRange<uint32>& PreviousCameraCut = InCameraCuts[CurrentCameraCutIndex - 1];
+
+			const TPair<FFrameNumber, FMovieSceneFloatValue>& PreviousKey = 0 <= i - 1
+				? Keys[i - 1]
+				: Keys[0];
+
+			const FFrameNumber CurrentCameraCutStartFrameNumber = static_cast<int32>(PreviousCameraCut.GetUpperBoundValue() * FrameRatio);
+
+			if (CurrentCameraCutIndex != InCameraCuts.Num())
+			{
+				if (CurrentKey.Key != CurrentCameraCutStartFrameNumber)
+				{
+					CurrentChannelData.AddKey(CurrentCameraCutStartFrameNumber, PreviousKey.Value);
+				}
+			}
+
+			if(CurrentCameraCutIndex == InCameraCuts.Num())
+			{
+				break;
+			}
+		}
+
+		if (CurrentCameraCutIndex == InCameraCuts.Num())
+		{
+			break;
+		}
+
+		TMovieSceneChannelData<FMovieSceneFloatValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
+		ChannelData.AddKey(CurrentKey.Key, CurrentKey.Value);
+	}
+
+	const TPair<FFrameNumber, FMovieSceneFloatValue>& LastKey = Keys.Last();
+
+	for (PTRINT i = 0; i < Channels.Num() - 1; ++i) {
+		CurrentCameraCutIndex += 1;
+		TMovieSceneChannelData<FMovieSceneFloatValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
+		ChannelData.AddKey(LastKey.Key, LastKey.Value);
 	}
 
 	return true;
@@ -639,39 +766,48 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 
 bool FVmdImporter::ImportVmdCameraTransform(
 	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-	const FGuid ObjectBinding,
+	const TArray<TRange<uint32>>& InCameraCuts,
+	const TArray<FGuid>& ObjectBindings,
 	const UMovieSceneSequence* InSequence,
 	const UMmdUserImportVmdSettings* ImportVmdSettings
 )
 {
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
 
-	UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
-	if (!TransformTrack)
+	TArray<FMovieSceneDoubleChannel*> Channels;
+	Channels.Reserve(ObjectBindings.Num());
+
+	for (FGuid ObjectBinding : ObjectBindings)
 	{
-		MovieScene->Modify();
-		TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+		UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+		if (!TransformTrack)
+		{
+			MovieScene->Modify();
+			TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+		}
+
+		TransformTrack->Modify();
+
+		bool bSectionAdded = false;
+		UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->FindOrAddSection(0, bSectionAdded));
+		if (!TransformSection)
+		{
+			return false;
+		}
+
+		TransformSection->Modify();
+
+		if (bSectionAdded)
+		{
+			TransformSection->SetRange(TRange<FFrameNumber>::All());
+		}
+
+		FMovieSceneDoubleChannel* LocationXChannel = TransformSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
+		Channels.Add(LocationXChannel);
 	}
 
-	TransformTrack->Modify();
-
-	bool bSectionAdded = false;
-	UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->FindOrAddSection(0, bSectionAdded));
-	if (!TransformSection)
-	{
-		return false;
-	}
-
-	TransformSection->Modify();
-
-	if (bSectionAdded)
-	{
-		TransformSection->SetRange(TRange<FFrameNumber>::All());
-	}
-	
-	FMovieSceneDoubleChannel* LocationXChannel = TransformSection->GetChannelProxy().GetChannel<FMovieSceneDoubleChannel>(0);
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
-	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const FFrameRate FrameRate = MovieScene->GetTickResolution();
 	const float UniformScale = ImportVmdSettings->ImportUniformScale;
 	FTangentAccessIndices TangentAccessIndices;
 	{
@@ -683,7 +819,8 @@ bool FVmdImporter::ImportVmdCameraTransform(
 
 	ImportCameraSingleChannel(
 		CameraKeyFrames,
-		LocationXChannel,
+		InCameraCuts,
+		Channels,
 		SampleRate,
 		FrameRate,
 		ImportVmdSettings->CameraCutImportType,
@@ -702,38 +839,62 @@ bool FVmdImporter::ImportVmdCameraTransform(
 
 bool FVmdImporter::ImportVmdCameraCenterTransform(
 	const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-	const FGuid ObjectBinding,
+	const TArray<TRange<uint32>>& InCameraCuts,
+	const TArray<FGuid>& ObjectBindings,
 	const UMovieSceneSequence* InSequence,
 	const UMmdUserImportVmdSettings* ImportVmdSettings
 )
 {
 	UMovieScene* MovieScene = InSequence->GetMovieScene();
 
-	UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
-	if (!TransformTrack)
-	{
-		MovieScene->Modify();
-		TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+	TArray<FMovieSceneDoubleChannel*> LocationXChannels;
+	LocationXChannels.Reserve(ObjectBindings.Num());
+	TArray<FMovieSceneDoubleChannel*> LocationYChannels;
+	LocationYChannels.Reserve(ObjectBindings.Num());
+	TArray<FMovieSceneDoubleChannel*> LocationZChannels;
+	LocationZChannels.Reserve(ObjectBindings.Num());
+	TArray<FMovieSceneDoubleChannel*> RotationXChannels;
+	RotationXChannels.Reserve(ObjectBindings.Num());
+	TArray<FMovieSceneDoubleChannel*> RotationYChannels;
+	RotationYChannels.Reserve(ObjectBindings.Num());
+	TArray<FMovieSceneDoubleChannel*> RotationZChannels;
+	RotationZChannels.Reserve(ObjectBindings.Num());
+
+	for (FGuid ObjectBinding : ObjectBindings) {
+		UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+		if (!TransformTrack)
+		{
+			MovieScene->Modify();
+			TransformTrack = MovieScene->AddTrack<UMovieScene3DTransformTrack>(ObjectBinding);
+		}
+		TransformTrack->Modify();
+
+		bool bSectionAdded = false;
+		UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->FindOrAddSection(0, bSectionAdded));
+		if (!TransformSection)
+		{
+			return false;
+		}
+
+		TransformSection->Modify();
+
+		if (bSectionAdded)
+		{
+			TransformSection->SetRange(TRange<FFrameNumber>::All());
+		}
+
+		const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
+
+		LocationXChannels.Add(Channels[0]);
+		LocationYChannels.Add(Channels[1]);
+		LocationZChannels.Add(Channels[2]);
+		RotationXChannels.Add(Channels[3]);
+		RotationYChannels.Add(Channels[4]);
+		RotationZChannels.Add(Channels[5]);
 	}
-	TransformTrack->Modify();
 
-	bool bSectionAdded = false;
-	UMovieScene3DTransformSection* TransformSection = Cast<UMovieScene3DTransformSection>(TransformTrack->FindOrAddSection(0, bSectionAdded));
-	if (!TransformSection)
-	{
-		return false;
-	}
-
-	TransformSection->Modify();
-
-	if (bSectionAdded)
-	{
-		TransformSection->SetRange(TRange<FFrameNumber>::All());
-	}
-
-	const TArrayView<FMovieSceneDoubleChannel*> Channels = TransformSection->GetChannelProxy().GetChannels<FMovieSceneDoubleChannel>();
 	const FFrameRate SampleRate = MovieScene->GetDisplayRate();
-	const FFrameRate FrameRate = TransformSection->GetTypedOuter<UMovieScene>()->GetTickResolution();
+	const FFrameRate FrameRate = MovieScene->GetTickResolution();
 	const float UniformScale = ImportVmdSettings->ImportUniformScale;
 	const ECameraCutImportType CameraCutImportType = ImportVmdSettings->CameraCutImportType;
 
@@ -748,7 +909,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 
 		ImportCameraSingleChannel(
 			CameraKeyFrames,
-			Channels[0], // Location X
+			InCameraCuts,
+			LocationXChannels,
 			SampleRate,
 			FrameRate,
 			CameraCutImportType,
@@ -774,7 +936,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 
 		ImportCameraSingleChannel(
 			CameraKeyFrames,
-			Channels[1], // Location Y
+			InCameraCuts,
+			LocationYChannels,
 			SampleRate,
 			FrameRate,
 			CameraCutImportType,
@@ -800,7 +963,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 
 		ImportCameraSingleChannel(
 			CameraKeyFrames,
-			Channels[2], // Location Z
+			InCameraCuts,
+			LocationZChannels,
 			SampleRate,
 			FrameRate,
 			CameraCutImportType,
@@ -826,7 +990,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 
 		ImportCameraSingleChannel(
 			CameraKeyFrames,
-			Channels[3], // Rotation X
+			InCameraCuts,
+			RotationXChannels,
 			SampleRate,
 			FrameRate,
 			CameraCutImportType,
@@ -842,7 +1007,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 
 		ImportCameraSingleChannel(
 			CameraKeyFrames,
-			Channels[4], // Rotation Y
+			InCameraCuts,
+			RotationYChannels,
 			SampleRate,
 			FrameRate,
 			CameraCutImportType,
@@ -858,7 +1024,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 
 		ImportCameraSingleChannel(
 			CameraKeyFrames,
-			Channels[5], // Rotation Z
+			InCameraCuts,
+			RotationZChannels,
 			SampleRate,
 			FrameRate,
 			CameraCutImportType,
@@ -880,6 +1047,41 @@ float FVmdImporter::ComputeFocalLength(const float FieldOfView, const float Sens
 {
 	// Focal Length = (Film or sensor width) / (2 * tan(FOV / 2))
 	return (SensorWidth / 2.f) / FMath::Tan(FMath::DegreesToRadians(FieldOfView / 2.f));
+}
+
+TArray<TRange<uint32>> FVmdImporter::ComputeCameraCuts(const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames)
+{
+	TArray<TRange<uint32>> CameraCuts;
+
+	uint32 RangeStart = CameraKeyFrames[0].FrameNumber;
+
+	for (PTRINT i = 1; i < CameraKeyFrames.Num(); ++i)
+	{
+		// ReSharper disable once CppUseStructuredBinding
+		const FVmdObject::FCameraKeyFrame& PreviousFrame = CameraKeyFrames[i - 1];
+		// ReSharper disable once CppUseStructuredBinding
+		const FVmdObject::FCameraKeyFrame& CurrentFrame = CameraKeyFrames[i];
+
+		if (
+			(CurrentFrame.FrameNumber - PreviousFrame.FrameNumber) <= 1 &&
+
+			(CurrentFrame.ViewAngle != PreviousFrame.ViewAngle ||
+				CurrentFrame.Distance != PreviousFrame.Distance ||
+				CurrentFrame.Position[0] != PreviousFrame.Position[0] ||
+				CurrentFrame.Position[1] != PreviousFrame.Position[1] ||
+				CurrentFrame.Position[2] != PreviousFrame.Position[2] ||
+				CurrentFrame.Rotation[0] != PreviousFrame.Rotation[0] ||
+				CurrentFrame.Rotation[1] != PreviousFrame.Rotation[1] ||
+				CurrentFrame.Rotation[2] != PreviousFrame.Rotation[2]))
+		{
+			CameraCuts.Push(TRange<uint32>(RangeStart, CurrentFrame.FrameNumber));
+			RangeStart = CurrentFrame.FrameNumber;
+		}
+	}
+
+	CameraCuts.Push(TRange<uint32>(RangeStart, CameraKeyFrames.Last().FrameNumber + 1));
+
+	return CameraCuts;
 }
 
 FGuid FVmdImporter::GetHandleToObject(
@@ -931,6 +1133,18 @@ FGuid FVmdImporter::GetHandleToObject(
 	}
 
 	return PropertyOwnerGuid;
+}
+
+UMovieSceneCameraCutTrack* FVmdImporter::GetCameraCutTrack(UMovieScene* InMovieScene)
+{
+	// Get the camera cut
+	UMovieSceneTrack* CameraCutTrack = InMovieScene->GetCameraCutTrack();
+	if (CameraCutTrack == nullptr)
+	{
+		InMovieScene->Modify();
+		CameraCutTrack = InMovieScene->AddCameraCutTrack(UMovieSceneCameraCutTrack::StaticClass());
+	}
+	return CastChecked<UMovieSceneCameraCutTrack>(CameraCutTrack);
 }
 
 #undef LOCTEXT_NAMESPACE

@@ -7,6 +7,7 @@
 #include "ISequencer.h"
 #include "MMDUserImportVMDSettings.h"
 #include "Channels/MovieSceneDoubleChannel.h"
+#include "Tracks/MovieSceneCameraCutTrack.h"
 
 // TODO: little endian check
 
@@ -145,41 +146,55 @@ private:
 		UMovieSceneSequence* InSequence,
 		IMovieScenePlayer* Player,
 		FMovieSceneSequenceIDRef TemplateID,
-		const FGuid MmdCameraGuid,
-		const FGuid MmdCameraCenterGuid,
+		const TArray<FGuid>& CameraGuids,
+		const TArray<FGuid>& CameraCenterGuids,
 		const UMmdUserImportVmdSettings* ImportVmdSettings
+	);
+
+	static void CreateCameraCutTrack(
+		const TArray<TRange<uint32>>& InCameraCuts,
+		const TArray<FGuid>& ObjectBindings,
+		const UMovieSceneSequence* InSequence
 	);
 
 	static bool ImportVmdCameraFocalLengthProperty(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-		const FGuid ObjectBinding,
+		const TArray<TRange<uint32>>& InCameraCuts,
+		const TArray<FGuid>& ObjectBindings,
 		const UMovieSceneSequence* InSequence,
-		const UCineCameraComponent* InCineCameraComponent,
+		const TArray<UCineCameraComponent*>& InCineCameraComponents,
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
 	static bool CreateVmdCameraMotionBlurProperty(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-		const FGuid ObjectBinding,
+		const TArray<TRange<uint32>>& InCameraCuts,
+		const TArray<FGuid>& ObjectBindings,
 		const UMovieSceneSequence* InSequence,
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
 	static bool ImportVmdCameraTransform(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-		const FGuid ObjectBinding,
+		const TArray<TRange<uint32>>& InCameraCuts,
+		const TArray<FGuid>& ObjectBindings,
 		const UMovieSceneSequence* InSequence,
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
 	static bool ImportVmdCameraCenterTransform(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-		const FGuid ObjectBinding,
+		const TArray<TRange<uint32>>& InCameraCuts,
+		const TArray<FGuid>& ObjectBindings,
 		const UMovieSceneSequence* InSequence,
 		const UMmdUserImportVmdSettings* ImportVmdSettings
 	);
 
 	static float ComputeFocalLength(const float FieldOfView, const float SensorWidth);
+
+	static TArray<TRange<uint32>> ComputeCameraCuts(
+		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames
+	);
 
 	static FGuid GetHandleToObject(
 		UObject* InObject,
@@ -189,13 +204,14 @@ private:
 		bool bCreateIfMissing
 	);
 
-	// T must be double or float
+	static UMovieSceneCameraCutTrack* GetCameraCutTrack(UMovieScene* InMovieScene);
+	
 	// MovieSceneChannel must be FMovieSceneDoubleChannel or FMovieSceneFloatChannel
-	// MovieSceneValue must be FMovieSceneDoubleValue or FMovieSceneFloatValue
 	template<typename MovieSceneChannel>
 	static void ImportCameraSingleChannel(
 		const TArray<FVmdObject::FCameraKeyFrame>& CameraKeyFrames,
-		MovieSceneChannel* Channel,
+		const TArray<TRange<uint32>>& InCameraCuts,
+		TArray<MovieSceneChannel*>& Channels,
 		const FFrameRate SampleRate,
 		const FFrameRate FrameRate,
 		const ECameraCutImportType CameraCutImportType,
@@ -216,7 +232,10 @@ private:
 
 		{
 			const FVmdObject::FCameraKeyFrame& FirstCameraKeyFrame = CameraKeyFrames[0];
-			Channel->SetDefault(MapFunc(GetValueFunc(FirstCameraKeyFrame)));
+			for (MovieSceneChannel* Channel : Channels)
+			{
+				Channel->SetDefault(MapFunc(GetValueFunc(FirstCameraKeyFrame)));
+			}
 		}
 
 		const TArray<FVmdObject::FCameraKeyFrame> ReducedKeys = ReduceKeys<T>(
@@ -268,7 +287,18 @@ private:
 				if (PreviousKeyFrame != nullptr && CurrentKeyFrame.FrameNumber - PreviousKeyFrame->FrameNumber <= 1 && GetValueFunc(CurrentKeyFrame) != GetValueFunc(*PreviousKeyFrame))
 				{
 					ComputedKey.Time = static_cast<int32>(CurrentKeyFrame.FrameNumber) * FrameRatio;
-					ComputedKey.InterpMode = RCIM_Constant;
+
+					if (CameraCutImportType == ECameraCutImportType::ConstantKey)
+					{
+						ComputedKey.InterpMode = RCIM_Constant;
+					}
+					else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+					{
+						// if use multiple camera, ConstantKey is not required
+						ComputedKey.InterpMode = Channels.Num() == 1
+							? RCIM_Constant
+							: RCIM_Cubic;
+					}
 				}
 				else
 				{
@@ -295,20 +325,23 @@ private:
 
 		ImportComputedKeysToChannel<MovieSceneChannel>(
 			TimeComputedKeys,
-			Channel,
+			InCameraCuts,
+			Channels,
 			FrameRate);
 	}
 
 	template<typename MovieSceneChannel>
 	static void ImportComputedKeysToChannel(
 		TArray<TComputedKey<typename MovieSceneChannel::CurveValueType>>& TimeComputedKeys,
-		MovieSceneChannel* Channel,
+		const TArray<TRange<uint32>>& InCameraCuts,
+		TArray<MovieSceneChannel*>& Channels,
 		const FFrameRate FrameRate
 	)
 	{
 		using T = typename MovieSceneChannel::CurveValueType;
+		using FMovieSceneValue = typename MovieSceneChannel::ChannelValueType;
 
-		TMovieSceneChannelData<typename MovieSceneChannel::ChannelValueType> ChannelData = Channel->GetData();
+		TArray<TPair<FFrameNumber, FMovieSceneValue>> Keys;
 		
 		for (PTRINT i = 0; i < TimeComputedKeys.Num(); ++i)
 		{
@@ -376,7 +409,7 @@ private:
 				Tangent.LeaveTangentWeight = LeaveTangent.Length();
 			}
 
-			typename MovieSceneChannel::ChannelValueType MovieSceneValueInstance;
+			FMovieSceneValue MovieSceneValueInstance;
 			{
 				MovieSceneValueInstance.Value = CurrentKey.Value;
 				MovieSceneValueInstance.InterpMode = CurrentKey.InterpMode;
@@ -384,7 +417,86 @@ private:
 				MovieSceneValueInstance.Tangent = Tangent;
 			}
 
-			ChannelData.AddKey(CurrentKey.Time, MovieSceneValueInstance);
+			Keys.Add({ CurrentKey.Time, MovieSceneValueInstance });
+		}
+
+		const int32 FrameRatio = static_cast<int32>(FrameRate.AsDecimal() / 30.f);
+
+		PTRINT CurrentCameraCutIndex = 0;
+		for (PTRINT i = 0; i < Keys.Num(); ++i)
+		{
+			const TPair<FFrameNumber, FMovieSceneValue>& CurrentKey = Keys[i];
+
+			bool bCutFirstFrame = false;
+
+			while (static_cast<int32>(InCameraCuts[CurrentCameraCutIndex].GetUpperBoundValue() * FrameRatio) <= CurrentKey.Key)
+			{
+				CurrentCameraCutIndex += 1;
+
+				bCutFirstFrame = true;
+
+				TMovieSceneChannelData<FMovieSceneValue> PreviousChannelData = Channels[(CurrentCameraCutIndex - 1) % Channels.Num()]->GetData();
+				TMovieSceneChannelData<FMovieSceneValue> CurrentChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
+				const TRange<uint32>& PreviousCameraCut = InCameraCuts[CurrentCameraCutIndex - 1];
+
+				const TPair<FFrameNumber, FMovieSceneValue>& PreviousKey = 0 <= i - 1
+					? Keys[i - 1]
+					: Keys[0];
+
+				const FFrameNumber CurrentCameraCutStartFrameNumber = static_cast<int32>(PreviousCameraCut.GetUpperBoundValue() * FrameRatio);
+
+				FMovieSceneValue PreviousZeroTangentValue = PreviousKey.Value;
+				{
+					PreviousZeroTangentValue.InterpMode = RCIM_Cubic;
+
+					FMovieSceneTangentData Tangent;
+					Tangent.TangentWeightMode = RCTWM_WeightedNone;
+					Tangent.ArriveTangent = 0.0f;
+					Tangent.LeaveTangent = 0.0f;
+					PreviousZeroTangentValue.Tangent = Tangent;
+				}
+
+				if (CurrentCameraCutIndex != InCameraCuts.Num())
+				{
+					if (CurrentKey.Key != CurrentCameraCutStartFrameNumber)
+					{
+						CurrentChannelData.AddKey(CurrentCameraCutStartFrameNumber, PreviousZeroTangentValue);
+					}
+				}
+
+				PreviousChannelData.AddKey(CurrentCameraCutStartFrameNumber, PreviousZeroTangentValue);
+
+				if (CurrentCameraCutIndex == InCameraCuts.Num())
+				{
+					break;
+				}
+			}
+
+			if (CurrentCameraCutIndex == InCameraCuts.Num())
+			{
+				break;
+			}
+
+			TMovieSceneChannelData<FMovieSceneValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
+			if (bCutFirstFrame)
+			{
+				FMovieSceneValue ArriveZeroTangentValue = CurrentKey.Value;
+				ArriveZeroTangentValue.Tangent.TangentWeightMode = RCTWM_WeightedLeave;
+				ArriveZeroTangentValue.Tangent.ArriveTangent = 0.0f;
+				ChannelData.AddKey(CurrentKey.Key, ArriveZeroTangentValue);
+			}
+			else
+			{
+				ChannelData.AddKey(CurrentKey.Key, CurrentKey.Value);
+			}
+		}
+
+		const TPair<FFrameNumber, FMovieSceneValue>& LastKey = Keys.Last();
+
+		for (PTRINT i = 0; i < Channels.Num() - 1; ++i) {
+			CurrentCameraCutIndex += 1;
+			TMovieSceneChannelData<FMovieSceneValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
+			ChannelData.AddKey(LastKey.Key, LastKey.Value);
 		}
 	}
 
@@ -424,7 +536,7 @@ private:
 private:
 	FString FilePath;
 	TUniquePtr<FArchive> FileReader;
-
+	
 	struct FTangentAccessIndices
 	{
 		PTRINT ArriveTangentX;

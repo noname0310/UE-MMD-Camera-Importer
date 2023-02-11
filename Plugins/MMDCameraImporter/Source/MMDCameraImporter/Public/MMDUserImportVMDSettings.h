@@ -45,6 +45,10 @@ public:
 	UPROPERTY(EditAnywhere, config, Category = KeyFrame)
 	ECameraCutImportType CameraCutImportType;
 
+	/** Camera Count */
+	UPROPERTY(EditAnywhere, config, Category = KeyFrame, meta = (ClampMin = "1", ClampMax = "4"))
+	int CameraCount;
+
 	/** Add Motion Blur Key */
 	UPROPERTY(EditAnywhere, config, Category = KeyFrame)
 	bool bAddMotionBlurKey;

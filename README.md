@@ -94,7 +94,7 @@ This video has the problem.
 
 As shown in the picture above, there is a problem of creating a bad-looking motion blur.
 
-### Problem2(solved): Add Motion Blur Track
+### Problem2(solve method1): Add Motion Blur Track
 
 So to solve this problem, I added a function of turning off the motion blur only from the camera cut.
 
@@ -105,6 +105,20 @@ This is the function shown on the import menu.
 ![motion blur track](docs/fig6.png)
 
 If you import, this is how motion blur tracks appear on the camera.
+
+### Problem2(solve method2): Use Multiple Cameras
+
+Create a camera cut by swapping multiple cameras (at least two).
+
+![camera count menu](docs/fig11.png)
+
+In Import Settings, you can determine the number of cameras. The maximum value is 4.
+
+![camera cut track](docs/fig12.png)
+
+This picture shows four cameras swapping each other and use splitted camera motion.
+
+This method provides the cleanest results in Sequencer.
 
 ## Knowns Issues
 

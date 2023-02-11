@@ -8,7 +8,7 @@
 
 ## Installation
 
-### [Download Link](https://downgit.github.io/#/home?url=https://github.com/noname0310/UE-MMD-Camera-Importer/tree/master/Plugins/MMDCameraImporter)
+### [Download Link](https://github.com/noname0310/UE-MMD-Camera-Importer/releases/download/v1.0.0/MMDCameraImporter_v1.0.0.zip)
 
 - Close the Unreal Editor
 

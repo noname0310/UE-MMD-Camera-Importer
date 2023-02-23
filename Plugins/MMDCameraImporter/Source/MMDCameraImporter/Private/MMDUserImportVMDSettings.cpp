@@ -3,6 +3,12 @@
 #include "MmdUserImportVmdSettings.h"
 #include "UObject/UnrealType.h"
 
+FFilmbackImportSettings::FFilmbackImportSettings()
+{
+	SensorWidth = 24.0f;
+	SensorHeight = 13.5f;
+}
+
 UMmdUserImportVmdSettings::UMmdUserImportVmdSettings(const FObjectInitializer& Initializer)
 	: Super(Initializer)
 {
@@ -11,6 +17,4 @@ UMmdUserImportVmdSettings::UMmdUserImportVmdSettings(const FObjectInitializer& I
 	CameraCount = 2;
 	bAddMotionBlurKey = false;
 	MotionBlurAmount = 0.5f;
-	CameraFilmback.SensorWidth = 24.0f;
-	CameraFilmback.SensorHeight = 13.5f;
 }

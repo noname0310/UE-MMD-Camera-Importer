@@ -20,6 +20,8 @@ struct FFilmbackImportSettings
 {
 	GENERATED_BODY()
 
+	FFilmbackImportSettings();
+
 	/** Horizontal size of filmback or digital sensor, in mm. */
 	UPROPERTY(EditAnywhere, config, meta = (ClampMin = "0.001", ForceUnits = mm))
 	float SensorWidth;

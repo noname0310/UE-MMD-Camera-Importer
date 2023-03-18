@@ -719,8 +719,7 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 		while(static_cast<int32>(InCameraCuts[CurrentCameraCutIndex].GetUpperBoundValue() * FrameRatio) <= CurrentKey.Key)
 		{
 			CurrentCameraCutIndex += 1;
-
-			TMovieSceneChannelData<FMovieSceneFloatValue> PreviousChannelData = Channels[(CurrentCameraCutIndex - 1) % Channels.Num()]->GetData();
+			
 			TMovieSceneChannelData<FMovieSceneFloatValue> CurrentChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
 			const TRange<uint32>& PreviousCameraCut = InCameraCuts[CurrentCameraCutIndex - 1];
 
@@ -755,7 +754,8 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 
 	const TPair<FFrameNumber, FMovieSceneFloatValue>& LastKey = Keys.Last();
 
-	for (PTRINT i = 0; i < Channels.Num() - 1; ++i) {
+	for (PTRINT i = 0; i < Channels.Num() - 1; ++i)
+	{
 		CurrentCameraCutIndex += 1;
 		TMovieSceneChannelData<FMovieSceneFloatValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
 		ChannelData.AddKey(LastKey.Key, LastKey.Value);
@@ -860,7 +860,8 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 	TArray<FMovieSceneDoubleChannel*> RotationZChannels;
 	RotationZChannels.Reserve(ObjectBindings.Num());
 
-	for (FGuid ObjectBinding : ObjectBindings) {
+	for (FGuid ObjectBinding : ObjectBindings)
+	{
 		UMovieScene3DTransformTrack* TransformTrack = MovieScene->FindTrack<UMovieScene3DTransformTrack>(ObjectBinding);
 		if (!TransformTrack)
 		{

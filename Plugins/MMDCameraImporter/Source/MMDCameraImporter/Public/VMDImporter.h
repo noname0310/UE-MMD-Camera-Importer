@@ -493,7 +493,8 @@ private:
 
 		const TPair<FFrameNumber, FMovieSceneValue>& LastKey = Keys.Last();
 
-		for (PTRINT i = 0; i < Channels.Num() - 1; ++i) {
+		for (PTRINT i = 0; i < Channels.Num() - 1; ++i)
+		{
 			CurrentCameraCutIndex += 1;
 			TMovieSceneChannelData<FMovieSceneValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
 			ChannelData.AddKey(LastKey.Key, LastKey.Value);

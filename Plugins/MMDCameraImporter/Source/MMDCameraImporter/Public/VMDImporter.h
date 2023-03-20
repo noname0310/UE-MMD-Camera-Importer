@@ -245,11 +245,6 @@ private:
 				return GetValueFunc(KeyFrames[Index]);
 			});
 
-		if (ReducedKeys.Num() == 0)
-		{
-			return;
-		}
-
 		TArray<TComputedKey<T>> TimeComputedKeys;
 
 		for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
@@ -482,15 +477,46 @@ private:
 				break;
 			}
 
+			bool bIsLastFrame = false;
+			{
+                if (Keys.Num() <= i + 1)
+                {
+                    bIsLastFrame = true;
+                }
+                else
+                {
+                    // ReSharper disable once CppTooWideScopeInitStatement
+                    const TPair<FFrameNumber, FMovieSceneValue>& NextKey = Keys[i + 1];
+
+                    if (static_cast<int32>(InCameraCuts[CurrentCameraCutIndex].GetUpperBoundValue() * FrameRatio) <= NextKey.Key)
+                    {
+                        bIsLastFrame = true;
+                    }
+                }
+			}
+
 			FMovieSceneValue TangentValue = CurrentKey.Value;
 			{
 				if (bIsFirstFrame)
 				{
 					TangentValue.Tangent.ArriveTangent = 0.0f;
 				}
-			    if (bIsFirstFrame)
+				if (bIsLastFrame)
+				{
+					TangentValue.Tangent.LeaveTangent = 0.0f;
+				}
+
+				if (bIsFirstFrame && bIsLastFrame)
+				{
+					TangentValue.Tangent.TangentWeightMode = RCTWM_WeightedNone;
+				}
+				else if (bIsFirstFrame)
 				{
 					TangentValue.Tangent.TangentWeightMode = RCTWM_WeightedLeave;
+				}
+				else if (bIsLastFrame)
+				{
+					TangentValue.Tangent.TangentWeightMode = RCTWM_WeightedArrive;
 				}
 			}
 
@@ -536,6 +562,11 @@ private:
 			Result.Push(Current);
 
 			LastValue = CurrentValue;
+		}
+
+		if (!InCameraKeyFrames.IsEmpty() && Result.IsEmpty())
+		{
+			Result.Push(InCameraKeyFrames[0]);
 		}
 
 		return Result;

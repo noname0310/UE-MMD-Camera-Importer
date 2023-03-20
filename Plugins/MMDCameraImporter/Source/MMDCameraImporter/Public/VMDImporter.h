@@ -245,6 +245,11 @@ private:
 				return GetValueFunc(KeyFrames[Index]);
 			});
 
+		if (ReducedKeys.Num() == 0)
+		{
+			return;
+		}
+
 		TArray<TComputedKey<T>> TimeComputedKeys;
 
 		for (PTRINT i = 0; i < ReducedKeys.Num(); ++i)
@@ -427,13 +432,13 @@ private:
 		{
 			const TPair<FFrameNumber, FMovieSceneValue>& CurrentKey = Keys[i];
 
-			bool bCutFirstFrame = false;
+			bool bIsFirstFrame = false;
 
 			while (static_cast<int32>(InCameraCuts[CurrentCameraCutIndex].GetUpperBoundValue() * FrameRatio) <= CurrentKey.Key)
 			{
 				CurrentCameraCutIndex += 1;
 
-				bCutFirstFrame = true;
+				bIsFirstFrame = true;
 
 				TMovieSceneChannelData<FMovieSceneValue> PreviousChannelData = Channels[(CurrentCameraCutIndex - 1) % Channels.Num()]->GetData();
 				TMovieSceneChannelData<FMovieSceneValue> CurrentChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
@@ -477,18 +482,20 @@ private:
 				break;
 			}
 
+			FMovieSceneValue TangentValue = CurrentKey.Value;
+			{
+				if (bIsFirstFrame)
+				{
+					TangentValue.Tangent.ArriveTangent = 0.0f;
+				}
+			    if (bIsFirstFrame)
+				{
+					TangentValue.Tangent.TangentWeightMode = RCTWM_WeightedLeave;
+				}
+			}
+
 			TMovieSceneChannelData<FMovieSceneValue> ChannelData = Channels[CurrentCameraCutIndex % Channels.Num()]->GetData();
-			if (bCutFirstFrame)
-			{
-				FMovieSceneValue ArriveZeroTangentValue = CurrentKey.Value;
-				ArriveZeroTangentValue.Tangent.TangentWeightMode = RCTWM_WeightedLeave;
-				ArriveZeroTangentValue.Tangent.ArriveTangent = 0.0f;
-				ChannelData.AddKey(CurrentKey.Key, ArriveZeroTangentValue);
-			}
-			else
-			{
-				ChannelData.AddKey(CurrentKey.Key, CurrentKey.Value);
-			}
+			ChannelData.AddKey(CurrentKey.Key, TangentValue);
 		}
 
 		const TPair<FFrameNumber, FMovieSceneValue>& LastKey = Keys.Last();

@@ -695,7 +695,7 @@ bool FVmdImporter::CreateVmdCameraMotionBlurProperty(
 			MovieSceneFloatValue.InterpMode = RCIM_Constant;
 			Keys.Add({ static_cast<int32>(LowerBound) * FrameRatio, MovieSceneFloatValue });
 		}
-		else // TODO: Apply OneFrame Interval Key Position
+		else
 		{
 			FMovieSceneFloatValue MovieSceneFloatValue;
 			MovieSceneFloatValue.Value = 0.0f;

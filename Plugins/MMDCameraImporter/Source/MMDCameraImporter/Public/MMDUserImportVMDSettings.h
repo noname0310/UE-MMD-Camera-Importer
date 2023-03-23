@@ -12,6 +12,7 @@ enum class ECameraCutImportType
 {
 	OneFrameInterval UMETA(DisplayName = "One Frame Interval (Best for Sequencer)"),
 	ConstantKey UMETA(DisplayName = "Constant Key (MMD 60 frame animation method)"),
+	// OneFrameIntervalWithConstantKey UMETA(DisplayNAme = "One Frame Interval with Constant Key on Camera swap(For TemporalAA)")
 	ImportAsIs UMETA(DisplayName = "Import As Is (For 30 frame animation)"),
 };
 

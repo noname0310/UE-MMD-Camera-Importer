@@ -292,7 +292,8 @@ private:
 					{
 						ComputedKey.InterpMode = RCIM_Constant;
 					}
-					else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval)
+					else if (CameraCutImportType == ECameraCutImportType::OneFrameInterval ||
+						CameraCutImportType == ECameraCutImportType::OneFrameIntervalWithConstantKey)
 					{
 						// if use multiple camera, ConstantKey is not required
 						ComputedKey.InterpMode = Channels.Num() == 1
@@ -311,6 +312,11 @@ private:
 					{
 						ComputedKey.Time = (static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame;
 						ComputedKey.InterpMode = RCIM_Cubic;
+					}
+					else if (CameraCutImportType == ECameraCutImportType::OneFrameIntervalWithConstantKey)
+					{
+						ComputedKey.Time = (static_cast<int32>(NextKeyFrame->FrameNumber) * FrameRatio) - OneSampleFrame;
+						ComputedKey.InterpMode = RCIM_Constant;
 					}
 				}
 			}

@@ -395,7 +395,7 @@ private:
 
 				if (ArriveTangent.X == 0.0f)
 				{
-					Tangent.ArriveTangent = 1.0f;
+				    Tangent.ArriveTangent = ArriveTangent.Y < 0 ? -1.0f : 1.0f;
 				}
 				else
 				{
@@ -404,7 +404,7 @@ private:
 
 				if (LeaveTangent.X == 0.0f)
 				{
-					Tangent.LeaveTangent = 1.0f;
+					Tangent.LeaveTangent = LeaveTangent.Y < 0 ? -1.0f : 1.0f;
 				}
 				else
 				{

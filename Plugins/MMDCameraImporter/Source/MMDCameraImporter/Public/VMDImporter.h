@@ -539,7 +539,7 @@ private:
 			ChannelData.AddKey(LastKey.Key, LastKey.Value);
 		}
 	}
-
+	
 	// T must be number
 	template<typename T>
 	static TArray<FVmdObject::FCameraKeyFrame> ReduceKeys(
@@ -549,30 +549,26 @@ private:
 	{
 		TArray<FVmdObject::FCameraKeyFrame> Result;
 
-		T LastValue = 0;
+		Result.Push(InCameraKeyFrames[0]);
 
-		for (PTRINT i = 0; i < InCameraKeyFrames.Num() - 1; ++i)
+		for (PTRINT i = 1; i < InCameraKeyFrames.Num() - 1; ++i)
 		{
+			const T PreviousValue = InGetValueFunc(InCameraKeyFrames, i - 1);
 			const T CurrentValue = InGetValueFunc(InCameraKeyFrames, i);
 			const T NextValue = InGetValueFunc(InCameraKeyFrames, i + 1);
 
-			if (
-				LastValue == CurrentValue &&
-				CurrentValue == NextValue
-			)
+			if (PreviousValue == CurrentValue && CurrentValue == NextValue)
 			{
 				continue;
 			}
 
 			const FVmdObject::FCameraKeyFrame& Current = InCameraKeyFrames[i];
 			Result.Push(Current);
-
-			LastValue = CurrentValue;
 		}
 
-		if (!InCameraKeyFrames.IsEmpty() && Result.IsEmpty())
+		if (1 < InCameraKeyFrames.Num())
 		{
-			Result.Push(InCameraKeyFrames[0]);
+			Result.Push(InCameraKeyFrames.Last());
 		}
 
 		return Result;

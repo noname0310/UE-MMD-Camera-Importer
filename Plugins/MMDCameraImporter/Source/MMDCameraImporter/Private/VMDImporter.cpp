@@ -902,10 +902,11 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 	{
 		FTangentAccessIndices LocationXTangentAccessIndices;
 		{
-			LocationXTangentAccessIndices.ArriveTangentX = 1;
-			LocationXTangentAccessIndices.ArriveTangentY = 3;
-			LocationXTangentAccessIndices.LeaveTangentX = 0;
-			LocationXTangentAccessIndices.LeaveTangentY = 2;
+			// mmd z axis tangent value indices
+			LocationXTangentAccessIndices.ArriveTangentX = 9;
+			LocationXTangentAccessIndices.ArriveTangentY = 11;
+			LocationXTangentAccessIndices.LeaveTangentX = 8;
+			LocationXTangentAccessIndices.LeaveTangentY = 10;
 		}
 
 		ImportCameraSingleChannel(
@@ -929,10 +930,11 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 	{
 		FTangentAccessIndices LocationYTangentAccessIndices;
 		{
-			LocationYTangentAccessIndices.ArriveTangentX = 5;
-			LocationYTangentAccessIndices.ArriveTangentY = 7;
-			LocationYTangentAccessIndices.LeaveTangentX = 4;
-			LocationYTangentAccessIndices.LeaveTangentY = 6;
+			// mmd x axis tangent value indices
+			LocationYTangentAccessIndices.ArriveTangentX = 1;
+			LocationYTangentAccessIndices.ArriveTangentY = 3;
+			LocationYTangentAccessIndices.LeaveTangentX = 0;
+			LocationYTangentAccessIndices.LeaveTangentY = 2;
 		}
 
 		ImportCameraSingleChannel(
@@ -956,10 +958,11 @@ bool FVmdImporter::ImportVmdCameraCenterTransform(
 	{
 		FTangentAccessIndices LocationZTangentAccessIndices;
 		{
-			LocationZTangentAccessIndices.ArriveTangentX = 9;
-			LocationZTangentAccessIndices.ArriveTangentY = 11;
-			LocationZTangentAccessIndices.LeaveTangentX = 8;
-			LocationZTangentAccessIndices.LeaveTangentY = 10;
+			// mmd y axis tangent value indices
+			LocationZTangentAccessIndices.ArriveTangentX = 5;
+			LocationZTangentAccessIndices.ArriveTangentY = 7;
+			LocationZTangentAccessIndices.LeaveTangentX = 4;
+			LocationZTangentAccessIndices.LeaveTangentY = 6;
 		}
 
 		ImportCameraSingleChannel(

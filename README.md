@@ -84,6 +84,18 @@ if you want to get the same results as MMD, it is also good to use this method.
 
 This result can be obtained when the `Camera Cut Import Type` is `Constant Key`.
 
+### Problem1(solve method3): Use both methods 1 and 2
+
+If you think a little bit about the constant interpolation of MMD, you can see that it is designed so that there is no problem with the camera cut in any frame over 30 frames.
+
+However, method 1 only imports assuming proper behavior at a fixed frame rate.
+
+So I added a option that combines the two methods.
+
+This method is good in situations such as games with a dynamic frame rate.
+
+This result can be obtained when the `Camera Cut Import Type` is `One Frame Interval With Constant Key`.
+
 ### Problem2: Motion Blur
 
 The mmd camera teleports in the camera cut, so a motion blur is instantaneously generated during one frame.

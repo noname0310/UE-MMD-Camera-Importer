@@ -4,15 +4,25 @@
 
 ![Logo](Plugins/MMDCameraImporter/Resources/Icon128.png)
 
-- Tested on Unreal Engine 5.0.3, 5.1.0, 5.1.1, 5.2.0 Preview1
+- Tested on Unreal Engine 5.0.3, 5.1.0, 5.1.1, 5.2.0
 
 ## Installation
 
 ### [Download Link](https://github.com/noname0310/UE-MMD-Camera-Importer/releases/download/v1.0.3/MMDCameraImporter_v1.0.3.zip)
 
-- Close the Unreal Editor
+- If you have never created a C++ project, you must first create a C++ dummy project.
+
+    ![project creation setting](docs/fig13.png)
+
+- If the project is opened, Close the Unreal Editor
 
 - Download the plugin from the link above and extract it into the `{ProjectRoot}/Plugins` folder of the project. If you don't have a folder, create it.
+
+    ![folder structure](docs/fig15.png)
+
+- Once you run the Editor in Debug Mode in Visual Studio, it builds the plugin.
+
+    ![run editor on visualstudio](docs/fig14.png)
 
 ## How to use
 

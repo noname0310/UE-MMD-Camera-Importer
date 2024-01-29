@@ -4,7 +4,7 @@
 
 ![Logo](Plugins/MMDCameraImporter/Resources/Icon128.png)
 
-- Tested on Unreal Engine 5.0.3, 5.1.0, 5.1.1, 5.2.0
+- Tested on Unreal Engine 5.0.3, 5.1.0, 5.1.1, 5.2.0, 5.3.2
 
 ## Installation
 

@@ -47,7 +47,7 @@ bool FVmdImporter::IsValidVmdFile()
 	FileReader->Seek(0);
 	uint8 Magic[30];
 	FileReader->Serialize(Magic, sizeof Magic);
-	if (FMmdImportHelper::ShiftJisToFString(Magic, sizeof Magic).Contains("Vocaloid Motion Data 0002") == false)
+	if (FMmdImportHelper::ShiftJisToFString(Magic, sizeof Magic).StartsWith("Vocaloid Motion Data 0002", ESearchCase::CaseSensitive) == false)
 	{
 		UE_LOG(LogMMDCameraImporter, Error, TEXT("File is not vmd format"));
 		return false;
@@ -77,8 +77,8 @@ bool FVmdImporter::IsValidVmdFile()
 
 	if (FileSize < Offset + static_cast<int64>(sizeof(uint32)))
 	{
-		UE_LOG(LogMMDCameraImporter, Error, TEXT("File seems to be corrupt(Failed to read number of camera keyframes)"));
-		return false;
+		UE_LOG(LogMMDCameraImporter, Warning, TEXT("File does not contain camera/self shadow/property keyframes"));
+		return true;
 	}
 	FileReader->Seek(Offset);
 	uint32 CameraKeyFrameCount = 0;
@@ -97,8 +97,8 @@ bool FVmdImporter::IsValidVmdFile()
 
 	if (FileSize < Offset + static_cast<int64>(sizeof(uint32)))
 	{
-		UE_LOG(LogMMDCameraImporter, Error, TEXT("File seems to be corrupt(Failed to read number of self shadow keyframes)"));
-		return false;
+		UE_LOG(LogMMDCameraImporter, Log, TEXT("File does not contain self shadow/property keyframes"));
+		return true;
 	}
 	FileReader->Seek(Offset);
 	uint32 SelfShadowKeyFrameCount = 0;
@@ -107,8 +107,8 @@ bool FVmdImporter::IsValidVmdFile()
 
 	if (FileSize < Offset + static_cast<int64>(sizeof(uint32)))
 	{
-		UE_LOG(LogMMDCameraImporter, Error, TEXT("File seems to be corrupt(Failed to read number of properties keyframes)"));
-		return false;
+		UE_LOG(LogMMDCameraImporter, Log, TEXT("File does not contain property keyframes"));
+		return true;
 	}
 	FileReader->Seek(Offset);
 	uint32 PropertyKeyFrameCount = 0;
@@ -164,6 +164,8 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	FScopedSlowTask ImportVmdTask(7, LOCTEXT("ReadingVMDFile", "Reading VMD File"));
 	ImportVmdTask.MakeDialog(true, true);
 
+	const int64 FileSize = FileReader->TotalSize();
+
 	FVmdParseResult VmdParseResult;
 	VmdParseResult.bIsSuccess = false;
 	
@@ -201,6 +203,11 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	{
 		return VmdParseResult;
 	}
+	if (FileSize < FileReader->Tell() + static_cast<int64>(sizeof(uint32))) // some VMD files don't have camera, light key frames
+	{
+		VmdParseResult.bIsSuccess = true;
+		return VmdParseResult;
+	}
 	ImportVmdTask.EnterProgressFrame(1, LOCTEXT("ReadingVMDFileCameraKeyFrames", "Reading Camera Key Frames"));
 	uint32 CameraKeyFrameCount = 0;
 	FileReader->Serialize(&CameraKeyFrameCount, sizeof(uint32));
@@ -223,6 +230,11 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 	{
 		return VmdParseResult;
 	}
+	if (FileSize < FileReader->Tell() + static_cast<int64>(sizeof(uint32))) // some VMD files don't have self shadow key frames
+	{
+		VmdParseResult.bIsSuccess = true;
+		return VmdParseResult;
+	}
 	ImportVmdTask.EnterProgressFrame(1, LOCTEXT("ReadingVMDFileSelfShadowKeyFrames", "Reading Self Shadow Key Frames"));
 	uint32 SelfShadowKeyFrameCount = 0;
 	FileReader->Serialize(&SelfShadowKeyFrameCount, sizeof(uint32));
@@ -232,6 +244,11 @@ FVmdParseResult FVmdImporter::ParseVmdFile()
 
 	if (ImportVmdTask.ShouldCancel())
 	{
+		return VmdParseResult;
+	}
+	if (FileSize < FileReader->Tell() + static_cast<int64>(sizeof(uint32))) // some VMD files don't have property key frames
+	{
+		VmdParseResult.bIsSuccess = true;
 		return VmdParseResult;
 	}
 	ImportVmdTask.EnterProgressFrame(1, LOCTEXT("ReadingVMDFilePropertyKeyFrames", "Reading Property Key Frames"));

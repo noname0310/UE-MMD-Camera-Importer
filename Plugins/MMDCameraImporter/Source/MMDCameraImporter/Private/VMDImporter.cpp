@@ -47,7 +47,7 @@ bool FVmdImporter::IsValidVmdFile()
 	FileReader->Seek(0);
 	uint8 Magic[30];
 	FileReader->Serialize(Magic, sizeof Magic);
-	if (FMmdImportHelper::ShiftJisToFString(Magic, sizeof Magic) != "Vocaloid Motion Data 0002")
+	if (FMmdImportHelper::ShiftJisToFString(Magic, sizeof Magic).Contains("Vocaloid Motion Data 0002") == false)
 	{
 		UE_LOG(LogMMDCameraImporter, Error, TEXT("File is not vmd format"));
 		return false;

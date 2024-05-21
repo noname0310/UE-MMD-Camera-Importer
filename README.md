@@ -8,7 +8,7 @@
 
 ## Installation
 
-### [Download Link](https://github.com/noname0310/UE-MMD-Camera-Importer/releases/download/v1.0.4/MMDCameraImporter_v1.0.4.zip)
+### [Download Link](https://github.com/noname0310/UE-MMD-Camera-Importer/releases/download/v1.0.5/MMDCameraImporter_v1.0.5.zip)
 
 - If you have never created a C++ project, you must first create a C++ dummy project.
 

@@ -11,8 +11,8 @@
 #include "MovieSceneToolHelpers.h"
 #include "ToolMenus.h"
 #include "VMDImporter.h"
-#include "DesktopPlatform/Public/DesktopPlatformModule.h"
-#include "DesktopPlatform/Public/IDesktopPlatform.h"
+#include "DesktopPlatformModule.h"
+#include "IDesktopPlatform.h"
 #include "Runtime/Launch/Resources/Version.h"
 
 DEFINE_LOG_CATEGORY(LogMMDCameraImporter);
